@@ -39,50 +39,60 @@ export default function HomePage() {
   });
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <Sidebar 
-        filter={filter} 
-        setFilter={setFilter}
-        emailCounts={{
-          all: emails.length,
-          unread: emails.filter(e => e.is_unread).length,
-          urgent: emails.filter(e => e.priority_category === 'urgent').length,
-          normal: emails.filter(e => e.priority_category === 'normal').length,
-          low: emails.filter(e => e.priority_category === 'low').length,
-        }}
-      />
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Top Bar */}
+      <TopBar onRefresh={fetchEmails} loading={loading} />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        <TopBar onRefresh={fetchEmails} loading={loading} />
-        
-        <div className="flex-1 flex overflow-hidden">
-          {/* Email List */}
-          <div className="w-96 border-r border-gray-200 bg-white overflow-y-auto">
-            <EmailList 
-              emails={filteredEmails}
-              selectedEmail={selectedEmail}
-              onSelectEmail={setSelectedEmail}
-              loading={loading}
-            />
-          </div>
+      {/* Main 3-Column Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar - Fixed width */}
+        <Sidebar 
+          filter={filter} 
+          setFilter={setFilter}
+          emailCounts={{
+            all: emails.length,
+            unread: emails.filter(e => e.is_unread).length,
+            urgent: emails.filter(e => e.priority_category === 'urgent').length,
+            normal: emails.filter(e => e.priority_category === 'normal').length,
+            low: emails.filter(e => e.priority_category === 'low').length,
+          }}
+        />
 
-          {/* Email View */}
-          <div className="flex-1 bg-white overflow-y-auto">
-            {selectedEmail ? (
-              <EmailView email={selectedEmail} />
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  <p className="mt-4 text-sm">Select an email to view</p>
-                </div>
+        {/* Email List - Fixed width */}
+        <div className="w-96 border-r border-gray-200 overflow-hidden flex flex-col">
+          <EmailList 
+            emails={filteredEmails}
+            selectedEmail={selectedEmail}
+            onSelectEmail={setSelectedEmail}
+            loading={loading}
+          />
+        </div>
+
+        {/* Reading Pane - Flexible width */}
+        <div className="flex-1 overflow-hidden">
+          {selectedEmail ? (
+            <EmailView email={selectedEmail} />
+          ) : (
+            <div className="h-full flex items-center justify-center bg-white">
+              <div className="text-center">
+                <svg 
+                  className="mx-auto h-16 w-16 text-gray-300 mb-4" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" 
+                  />
+                </svg>
+                <h3 className="text-sm font-medium text-gray-900 mb-1">No email selected</h3>
+                <p className="text-xs text-gray-500">Choose an email from the list to read</p>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
