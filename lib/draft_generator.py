@@ -12,8 +12,10 @@ from typing import Dict, Any, Optional
 from retry_utils import retry_with_backoff, logger
 try:
     from text_utils import clean_email_body, truncate_text
+    from context_monitor import estimate_context_size, progressive_truncate, log_context_stats
 except ImportError:
     from .text_utils import clean_email_body, truncate_text
+    from .context_monitor import estimate_context_size, progressive_truncate, log_context_stats
 
 
 class DraftGenerator:
@@ -70,14 +72,18 @@ class DraftGenerator:
     ) -> str:
         """Build Claude prompt with sender context"""
         
+        # CRITICAL: Check context size and truncate if needed
+        log_context_stats(sender_context, logger)
+        sender_context = progressive_truncate(sender_context, max_tokens=25000)
+        
         # Extract current email details
         current_email = sender_context['current_email']
         email_subject = current_email.get('subject', '(no subject)')
         raw_body = current_email.get('body', current_email.get('snippet', ''))
         
         # CRITICAL: Clean and truncate body to prevent context overflow
-        # Email bodies can be 500KB+ of HTML - must limit to ~4K chars
-        email_body = clean_email_body(raw_body, max_chars=4000)
+        # Email bodies can be 500KB+ of HTML - must limit aggressively
+        email_body = clean_email_body(raw_body, max_chars=1500)
         
         # Build context summary
         context_summary = self._format_context_summary(sender_context)

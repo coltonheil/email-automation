@@ -40,20 +40,32 @@ class SenderAnalyzer:
         # Get sender profile
         profile = self.db.get_sender_profile(sender_email)
         
-        # Get email history
-        history = self.db.get_sender_email_history(sender_email, limit=20)
+        # CRITICAL: Limit history to 10 emails to prevent context overflow
+        history = self.db.get_sender_email_history(sender_email, limit=10)
         
-        # Analyze history
+        # Analyze history (use clean_history for topics, but original for other analysis)
         relationship_type = self._determine_relationship_type(sender_email, history)
-        common_topics = self._extract_common_topics(history)
-        response_pattern = self._analyze_response_pattern(history)
-        avg_response_time = self._calculate_avg_response_time(history)
-        writing_style = self._analyze_writing_style(history)
-        urgency_level = self._determine_urgency_level(current_email, history)
+        common_topics = self._extract_common_topics(clean_history)  # Use clean version
+        response_pattern = self._analyze_response_pattern(clean_history)
+        avg_response_time = self._calculate_avg_response_time(clean_history)
+        writing_style = self._analyze_writing_style([])  # Skip style analysis to save context
+        urgency_level = self._determine_urgency_level(current_email, clean_history)
         
         # CRITICAL: Clean current_email body to prevent context overflow
-        # Email bodies can be 500KB+ HTML - must truncate
-        clean_current_email = summarize_email_for_context(current_email, max_body_chars=4000)
+        # Email bodies can be 500KB+ HTML - must truncate aggressively
+        clean_current_email = summarize_email_for_context(current_email, max_body_chars=1500)
+        
+        # CRITICAL: Strip email bodies from history - only keep metadata
+        # This prevents huge context when sender has many long emails
+        clean_history = []
+        for hist_email in history[:10]:  # Extra safety: limit to 10
+            clean_history.append({
+                'subject': hist_email.get('subject', ''),
+                'snippet': hist_email.get('snippet', '')[:200] if hist_email.get('snippet') else '',
+                'received_at': hist_email.get('received_at', ''),
+                'priority_score': hist_email.get('priority_score', 50),
+                # REMOVED: body, raw_data - only metadata for context
+            })
         
         # Build context
         context = {

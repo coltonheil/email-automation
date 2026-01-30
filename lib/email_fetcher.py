@@ -44,7 +44,7 @@ class EmailFetcher:
         action_name = "GMAIL_FETCH_EMAILS"
         
         input_params = {
-            "max_results": min(limit, 20),  # Cap at 20 to avoid 413 payload errors
+            "max_results": min(limit, 10),  # CRITICAL: Cap at 10 to avoid 413 payload errors
             "verbose": False,
             "include_payload": False  # Fetch metadata only, get body separately if needed
         }
@@ -80,7 +80,9 @@ class EmailFetcher:
         action_name = "OUTLOOK_OUTLOOK_LIST_MESSAGES"
         
         input_params = {
-            "top": limit  # OData standard for MS Graph API
+            "top": min(limit, 10),  # CRITICAL: Limit to 10 to avoid payload overflow
+            # CRITICAL: Only select necessary fields to reduce payload size
+            "select": "id,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,hasAttachments,importance,conversationId,bodyPreview"
         }
         
         if filter_query:

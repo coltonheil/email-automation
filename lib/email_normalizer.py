@@ -79,6 +79,10 @@ class EmailNormalizer:
         else:
             snippet = str(preview) if preview else ''
         
+        # CRITICAL: Truncate body to prevent context overflow
+        if len(body) > 2000:
+            body = body[:2000] + "\n\n[...truncated for size...]"
+        
         return {
             'id': f"gmail_{account_id}_{msg_id}",
             'provider': 'gmail',
@@ -97,7 +101,7 @@ class EmailNormalizer:
             'is_important': 'IMPORTANT' in labels,
             'received_at': received_at.isoformat() if hasattr(received_at, 'isoformat') else str(received_at),
             'has_attachments': len(email.get('attachmentList', [])) > 0,
-            'raw_data': email
+            # REMOVED: raw_data to reduce memory footprint and context size
         }
     
     @staticmethod
@@ -110,9 +114,21 @@ class EmailNormalizer:
         except:
             received_at = datetime.now()
         
-        # Extract body
+        # CRITICAL: Prefer bodyPreview over full body to avoid context overflow
+        # Full body can be 500KB+ of HTML
+        body_preview = email.get('bodyPreview', '')
         body_data = email.get('body', {})
-        body = body_data.get('content', '')
+        full_body = body_data.get('content', '')
+        
+        # Use preview if available, otherwise use truncated body
+        if body_preview:
+            body = body_preview[:2000]  # Truncate even preview to be safe
+        elif full_body:
+            # If full body is present (shouldn't be with $select), truncate aggressively
+            from text_utils import clean_email_body
+            body = clean_email_body(full_body, max_chars=1500)
+        else:
+            body = ''
         
         # Parse recipients
         from_addr = email.get('from', {}).get('emailAddress', {})
@@ -131,13 +147,13 @@ class EmailNormalizer:
             'cc': ', '.join([f"{r['emailAddress']['name']} <{r['emailAddress']['address']}>" for r in cc_recipients]),
             'bcc': '',
             'body': body,
-            'snippet': email.get('bodyPreview', ''),
+            'snippet': email.get('bodyPreview', '')[:500] if email.get('bodyPreview') else '',
             'labels': [email.get('categories', [])],
             'is_unread': not email.get('isRead', True),
             'is_important': email.get('importance', '') == 'high',
             'received_at': received_at.isoformat(),
             'has_attachments': email.get('hasAttachments', False),
-            'raw_data': email
+            # REMOVED: raw_data to reduce memory footprint and context size
         }
     
     @staticmethod
@@ -150,6 +166,10 @@ class EmailNormalizer:
         except:
             received_at = datetime.now()
         
+        # CRITICAL: Truncate body to prevent context overflow
+        raw_body = email.get('body', '')
+        body = raw_body[:2000] + "\n\n[...truncated...]" if len(raw_body) > 2000 else raw_body
+        
         return {
             'id': f"instantly_{account_id}_{email.get('id')}",
             'provider': 'instantly',
@@ -161,14 +181,14 @@ class EmailNormalizer:
             'to': email.get('to_email', ''),
             'cc': '',
             'bcc': '',
-            'body': email.get('body', ''),
-            'snippet': email.get('preview', '')[:200],
+            'body': body,
+            'snippet': email.get('preview', '')[:500] if email.get('preview') else '',
             'labels': [email.get('campaign_name', '')],
             'is_unread': email.get('status', '') == 'unread',
             'is_important': False,
             'received_at': received_at.isoformat(),
             'has_attachments': False,
-            'raw_data': email
+            # REMOVED: raw_data to reduce memory footprint and context size
         }
     
     @staticmethod

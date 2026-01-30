@@ -71,7 +71,7 @@ def truncate_text(text: str, max_chars: int = 4000, suffix: str = "\n\n[...trunc
         return text[:cutoff] + suffix
 
 
-def clean_email_body(body: str, max_chars: int = 4000) -> str:
+def clean_email_body(body: str, max_chars: int = 1500) -> str:
     """
     Clean and truncate email body for context
     
@@ -100,7 +100,7 @@ def clean_email_body(body: str, max_chars: int = 4000) -> str:
     return truncate_text(text, max_chars)
 
 
-def summarize_email_for_context(email: dict, max_body_chars: int = 2000) -> dict:
+def summarize_email_for_context(email: dict, max_body_chars: int = 1500) -> dict:
     """
     Create a context-safe summary of an email
     
