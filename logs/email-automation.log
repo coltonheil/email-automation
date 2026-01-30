@@ -80,3 +80,85 @@ Traceback (most recent call last):
 Exception: Error
 2026-01-30 14:15:45,803 - retry_utils - INFO - Loaded sender filters from config/sender_filters.json
 2026-01-30 14:15:45,803 - retry_utils - INFO - Skipping no-reply@example.com: No-reply emails don't need responses
+2026-01-30 15:13:24,672 - retry_utils - ERROR - Error in Operation 1: Error 1
+NoneType: None
+2026-01-30 15:13:24,673 - retry_utils - ERROR - Error in Operation 2: Error 2
+NoneType: None
+2026-01-30 15:13:24,673 - retry_utils - ERROR - Error in Test 1: Fail 1
+NoneType: None
+2026-01-30 15:13:24,673 - retry_utils - ERROR - Error in Test 2: Fail 2
+NoneType: None
+2026-01-30 15:13:24,673 - retry_utils - ERROR - Error report:
+Collected 2 errors:
+  - Test 1: Fail 1
+  - Test 2: Fail 2
+2026-01-30 15:13:24,673 - retry_utils - ERROR - Error in Test: Error
+NoneType: None
+2026-01-30 15:13:24,673 - retry_utils - ERROR - Error report:
+Collected 1 errors:
+  - Test: Error
+2026-01-30 15:13:24,673 - retry_utils - WARNING - always_fails failed (attempt 1/3): Permanent failure. Retrying in 0.1s...
+2026-01-30 15:13:24,808 - retry_utils - WARNING - always_fails failed (attempt 2/3): Permanent failure. Retrying in 0.2s...
+2026-01-30 15:13:25,070 - retry_utils - ERROR - always_fails failed after 3 attempts: Permanent failure
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 63, in always_fails
+    raise ValueError("Permanent failure")
+ValueError: Permanent failure
+2026-01-30 15:13:25,074 - retry_utils - WARNING - succeeds_on_third_try failed (attempt 1/3): Temporary failure. Retrying in 0.1s...
+2026-01-30 15:13:25,202 - retry_utils - WARNING - succeeds_on_third_try failed (attempt 2/3): Temporary failure. Retrying in 0.2s...
+2026-01-30 15:13:25,475 - retry_utils - INFO - Starting: Test operation (attempt 1/1)
+2026-01-30 15:13:25,475 - retry_utils - ERROR - Failed permanently: Test operation after 1 attempts: API failed
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 173, in test_context_manager_failure
+    raise Exception("API failed")
+Exception: API failed
+2026-01-30 15:13:25,476 - retry_utils - INFO - Starting: Test operation (attempt 1/3)
+2026-01-30 15:13:25,476 - retry_utils - INFO - Completed: Test operation
+2026-01-30 15:13:25,477 - retry_utils - WARNING - wrapped failed (attempt 1/3): API error. Retrying in 1.0s...
+2026-01-30 15:13:26,511 - retry_utils - WARNING - wrapped failed (attempt 2/3): API error. Retrying in 2.0s...
+2026-01-30 15:13:28,520 - retry_utils - ERROR - wrapped failed after 3 attempts: API error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 100, in failing_func
+    raise Exception("API error")
+Exception: API error
+2026-01-30 15:13:28,522 - retry_utils - ERROR - failing_func failed permanently: API error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 203, in safe_api_call
+    return wrapped()
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 100, in failing_func
+    raise Exception("API error")
+Exception: API error
+2026-01-30 15:13:28,524 - retry_utils - WARNING - wrapped failed (attempt 1/3): Error. Retrying in 1.0s...
+2026-01-30 15:13:29,547 - retry_utils - WARNING - wrapped failed (attempt 2/3): Error. Retrying in 2.0s...
+2026-01-30 15:13:31,599 - retry_utils - ERROR - wrapped failed after 3 attempts: Error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 108, in failing_func
+    raise Exception("Error")
+Exception: Error
+2026-01-30 15:13:31,600 - retry_utils - ERROR - failing_func failed permanently: Error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 203, in safe_api_call
+    return wrapped()
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 108, in failing_func
+    raise Exception("Error")
+Exception: Error
+2026-01-30 15:14:56,254 - retry_utils - INFO - Loaded sender filters from config/sender_filters.json
+2026-01-30 15:14:56,254 - retry_utils - INFO - Skipping no-reply@test.com: No-reply emails don't need responses
