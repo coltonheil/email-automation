@@ -5,6 +5,7 @@ import EmailList from '@/components/EmailList';
 import EmailView from '@/components/EmailView';
 import Sidebar from '@/components/Sidebar';
 import TopBar from '@/components/TopBar';
+import DashboardLayout from '@/components/DashboardLayout';
 
 export default function HomePage() {
   const [selectedEmail, setSelectedEmail] = useState<any>(null);
@@ -69,13 +70,14 @@ export default function HomePage() {
   });
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* Top Bar */}
-      <TopBar 
-        onRefresh={fetchEmails} 
-        loading={loading}
-        lastFetch={lastFetch}
-      />
+    <DashboardLayout>
+      <div className="flex flex-col h-full bg-gray-50">
+        {/* Top Bar */}
+        <TopBar 
+          onRefresh={fetchEmails} 
+          loading={loading}
+          lastFetch={lastFetch}
+        />
 
       {/* Error Banner */}
       {error && (
@@ -154,6 +156,7 @@ export default function HomePage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
