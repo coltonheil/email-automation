@@ -112,6 +112,39 @@ export async function GET(request: NextRequest) {
       GROUP BY priority_category
     `).all(cutoffStr);
     
+    // Category distribution
+    let categoryDistribution: any[] = [];
+    try {
+      categoryDistribution = db.prepare(`
+        SELECT 
+          COALESCE(category, 'uncategorized') as category,
+          COUNT(*) as count,
+          SUM(CASE WHEN is_unread = 1 THEN 1 ELSE 0 END) as unread
+        FROM emails
+        WHERE received_at >= ?
+        GROUP BY category
+        ORDER BY count DESC
+      `).all(cutoffStr);
+    } catch (e) {
+      // category column might not exist
+    }
+    
+    // Response time stats (if we have sent drafts)
+    let responseStats: any = { avg_hours: null, fastest_hours: null };
+    try {
+      const respResult = db.prepare(`
+        SELECT 
+          ROUND(AVG((julianday(d.sent_at) - julianday(e.received_at)) * 24), 1) as avg_hours,
+          ROUND(MIN((julianday(d.sent_at) - julianday(e.received_at)) * 24), 1) as fastest_hours
+        FROM draft_responses d
+        JOIN emails e ON d.email_id = e.id
+        WHERE d.sent_at IS NOT NULL AND d.created_at >= ?
+      `).get(cutoffStr);
+      if (respResult) responseStats = respResult;
+    } catch (e) {
+      // sent_at might not exist
+    }
+    
     db.close();
     
     // Calculate acceptance rate
@@ -138,6 +171,8 @@ export async function GET(request: NextRequest) {
       api: apiStats,
       top_senders: topSenders,
       priority_distribution: priorityDistribution,
+      category_distribution: categoryDistribution,
+      response_stats: responseStats,
     });
     
   } catch (error: any) {
