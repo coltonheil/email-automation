@@ -23,6 +23,7 @@ from sender_analyzer import SenderAnalyzer
 from draft_generator import DraftGenerator
 from retry_utils import ErrorCollector, logger
 from rate_limiter import RateLimiter
+from sender_filter import SenderFilter
 
 
 def main():
@@ -66,6 +67,7 @@ def main():
     
     # Initialize analyzers
     analyzer = SenderAnalyzer(db)
+    sender_filter = SenderFilter()
     
     # Initialize draft generator (uses Clawdbot + Claude Max subscription)
     generator = DraftGenerator(session_label="email-automation")
@@ -73,6 +75,11 @@ def main():
     # Initialize rate limiter
     rate_limiter = RateLimiter(max_drafts_per_run=args.limit)
     rate_limiter.reset_run_counter()
+    
+    # Log filter stats
+    filter_stats = sender_filter.get_stats()
+    logger.info(f"Sender filter loaded: {filter_stats['skip_patterns']} skip patterns, "
+                f"{filter_stats['always_draft_patterns']} VIP patterns")
     
     # Error collector for graceful handling
     errors = ErrorCollector()
@@ -90,20 +97,29 @@ def main():
             print(f"   From: {sender_email}")
         
         try:
+            # Build sender context first (needed for filtering)
+            if not args.json:
+                print("   📊 Analyzing sender context...")
+            
+            context = analyzer.build_sender_context(sender_email, email)
+            
+            # Check sender filter (whitelist/blacklist)
+            should_skip, filter_reason = sender_filter.should_skip_drafting(sender_email, context, email)
+            
+            if should_skip:
+                if not args.json:
+                    print(f"   🚫 Filtered: {filter_reason}")
+                logger.info(f"Filtered email {email_id}: {filter_reason}")
+                continue
+            
             # Check rate limits
             can_draft, reason = rate_limiter.can_generate_draft(email_id, sender_email)
             
             if not can_draft:
                 if not args.json:
-                    print(f"   ⏭️  Skipping: {reason}")
-                logger.info(f"Skipped email {email_id}: {reason}")
+                    print(f"   ⏭️  Rate limited: {reason}")
+                logger.info(f"Rate limited email {email_id}: {reason}")
                 continue
-            
-            # Build sender context
-            if not args.json:
-                print("   📊 Analyzing sender context...")
-            
-            context = analyzer.build_sender_context(sender_email, email)
             
             if not args.dry_run:
                 # Enforce rate limit delay

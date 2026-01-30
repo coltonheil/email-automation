@@ -78,3 +78,5 @@ Traceback (most recent call last):
   File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 108, in failing_func
     raise Exception("Error")
 Exception: Error
+2026-01-30 14:15:45,803 - retry_utils - INFO - Loaded sender filters from config/sender_filters.json
+2026-01-30 14:15:45,803 - retry_utils - INFO - Skipping no-reply@example.com: No-reply emails don't need responses
