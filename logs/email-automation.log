@@ -519,3 +519,6 @@ Exception: Failed to call Claude via Clawdbot: Clawdbot error: error: unknown co
 2026-01-30 16:23:26,862 - retry_utils - INFO - Composio action OUTLOOK_OUTLOOK_LIST_MESSAGES succeeded
 2026-01-30 16:23:26,900 - retry_utils - INFO - Executing Composio action: INSTANTLY_LIST_EMAILS (account: 03304007...)
 2026-01-30 16:23:29,257 - retry_utils - INFO - Composio action INSTANTLY_LIST_EMAILS succeeded
+2026-01-30 16:27:41,473 - retry_utils - INFO - Loaded sender filters from config/sender_filters.json
+2026-01-30 16:27:41,473 - retry_utils - INFO - Sender filter loaded: 21 skip patterns, 33 VIP patterns
+2026-01-30 16:27:41,473 - retry_utils - INFO - Starting auto-draft for 1 emails
