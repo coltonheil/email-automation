@@ -10,7 +10,9 @@ export default function HomePage() {
   const [selectedEmail, setSelectedEmail] = useState<any>(null);
   const [emails, setEmails] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, urgent, normal, low, unread
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState('all');
+  const [lastFetch, setLastFetch] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEmails();
@@ -18,12 +20,40 @@ export default function HomePage() {
 
   const fetchEmails = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      const response = await fetch('/api/emails?mode=unread&limit=100');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 second frontend timeout
+      
+      const response = await fetch('/api/emails?mode=unread&limit=20', {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch emails');
+      }
+      
       setEmails(data.emails || []);
-    } catch (error) {
+      setLastFetch(new Date().toLocaleTimeString());
+      setError(null);
+    } catch (error: any) {
       console.error('Failed to fetch emails:', error);
+      
+      if (error.name === 'AbortError') {
+        setError('Request timed out. The server is taking too long to respond.');
+      } else {
+        setError(error.message || 'Failed to fetch emails. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -41,11 +71,40 @@ export default function HomePage() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Top Bar */}
-      <TopBar onRefresh={fetchEmails} loading={loading} />
+      <TopBar 
+        onRefresh={fetchEmails} 
+        loading={loading}
+        lastFetch={lastFetch}
+      />
+
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-red-900">{error}</p>
+              <p className="text-xs text-red-700 mt-0.5">
+                Showing {emails.length} cached emails from last successful sync.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-600 hover:text-red-800 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Main 3-Column Layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - Fixed width */}
+        {/* Sidebar */}
         <Sidebar 
           filter={filter} 
           setFilter={setFilter}
@@ -58,7 +117,7 @@ export default function HomePage() {
           }}
         />
 
-        {/* Email List - Fixed width */}
+        {/* Email List */}
         <div className="w-96 border-r border-gray-200 overflow-hidden flex flex-col">
           <EmailList 
             emails={filteredEmails}
@@ -68,7 +127,7 @@ export default function HomePage() {
           />
         </div>
 
-        {/* Reading Pane - Flexible width */}
+        {/* Reading Pane */}
         <div className="flex-1 overflow-hidden">
           {selectedEmail ? (
             <EmailView email={selectedEmail} />

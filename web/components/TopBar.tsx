@@ -1,9 +1,10 @@
 interface TopBarProps {
   onRefresh: () => void;
   loading: boolean;
+  lastFetch?: string | null;
 }
 
-export default function TopBar({ onRefresh, loading }: TopBarProps) {
+export default function TopBar({ onRefresh, loading, lastFetch }: TopBarProps) {
   return (
     <div className="h-12 bg-white border-b border-gray-200 px-4 flex items-center justify-between shadow-sm">
       {/* Left section - Sync button */}
@@ -25,12 +26,16 @@ export default function TopBar({ onRefresh, loading }: TopBarProps) {
           <span className="font-medium">{loading ? 'Syncing...' : 'Sync'}</span>
         </button>
 
-        {loading && (
+        {loading ? (
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <div className="w-1 h-1 bg-primary-600 rounded-full animate-pulse"></div>
             <span>Fetching emails from 8 accounts...</span>
           </div>
-        )}
+        ) : lastFetch ? (
+          <div className="text-xs text-gray-500">
+            Last synced: <span className="font-medium text-gray-700">{lastFetch}</span>
+          </div>
+        ) : null}
       </div>
 
       {/* Center section - Search */}

@@ -8,13 +8,10 @@ const execAsync = promisify(exec);
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const mode = searchParams.get('mode') || 'unread';
-  const limit = searchParams.get('limit') || '100';
+  const limit = searchParams.get('limit') || '20'; // Reduced from 100 to 20
   const hours = searchParams.get('hours') || '24';
 
   try {
-    // Path to the Python script
-    const scriptPath = path.join(process.cwd(), '..', 'scripts', 'fetch_all_emails.py');
-    
     // Build command
     let command = `cd ${path.join(process.cwd(), '..')} && export COMPOSIO_API_KEY=$(grep COMPOSIO_API_KEY ~/clawd/.env | cut -d= -f2) && python3 scripts/fetch_all_emails.py --mode ${mode} --limit ${limit} --json`;
     
@@ -22,12 +19,13 @@ export async function GET(request: NextRequest) {
       command += ` --hours ${hours}`;
     }
 
-    // Execute Python script
+    // Execute Python script with 30-second timeout
     const { stdout, stderr } = await execAsync(command, {
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large email lists
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      timeout: 30000, // 30 second timeout
     });
 
-    if (stderr && !stderr.includes('Fetching')) {
+    if (stderr && !stderr.includes('Fetching') && stderr.trim()) {
       console.error('Script stderr:', stderr);
     }
 
@@ -38,14 +36,28 @@ export async function GET(request: NextRequest) {
       success: true,
       total_count: data.total_count || 0,
       emails: data.emails || [],
+      fetched_at: new Date().toISOString(),
     });
   } catch (error: any) {
     console.error('Error fetching emails:', error);
+    
+    // Check if it's a timeout error
+    if (error.killed && error.signal === 'SIGTERM') {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Request timed out after 30 seconds. Try reducing the limit.',
+          timeout: true,
+        },
+        { status: 504 }
+      );
+    }
+    
     return NextResponse.json(
       { 
         success: false, 
         error: error.message || 'Failed to fetch emails',
-        details: error.stderr || error.stdout
+        details: error.stderr || error.stdout,
       },
       { status: 500 }
     );
@@ -54,14 +66,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // Handle email actions (mark read, archive, etc.)
-  const body = await request.json();
-  const { action, emailId } = body;
+  try {
+    const body = await request.json();
+    const { action, emailId } = body;
 
-  // TODO: Implement email actions via Composio API
-  // For now, return success
-  return NextResponse.json({
-    success: true,
-    action,
-    emailId,
-  });
+    // TODO: Implement email actions via Composio API
+    // For now, return success
+    return NextResponse.json({
+      success: true,
+      action,
+      emailId,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
 }
