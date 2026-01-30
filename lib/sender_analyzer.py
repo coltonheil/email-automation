@@ -8,6 +8,10 @@ import re
 from typing import Dict, List, Any, Optional
 from collections import Counter
 from datetime import datetime, timedelta
+try:
+    from text_utils import clean_email_body, summarize_email_for_context
+except ImportError:
+    from .text_utils import clean_email_body, summarize_email_for_context
 
 
 class SenderAnalyzer:
@@ -47,6 +51,10 @@ class SenderAnalyzer:
         writing_style = self._analyze_writing_style(history)
         urgency_level = self._determine_urgency_level(current_email, history)
         
+        # CRITICAL: Clean current_email body to prevent context overflow
+        # Email bodies can be 500KB+ HTML - must truncate
+        clean_current_email = summarize_email_for_context(current_email, max_body_chars=4000)
+        
         # Build context
         context = {
             'sender_email': sender_email,
@@ -61,7 +69,7 @@ class SenderAnalyzer:
             'writing_style': writing_style,
             'urgency_level': urgency_level,
             'recent_email_count': len(history),
-            'current_email': current_email,
+            'current_email': clean_current_email,  # Use cleaned version
         }
         
         return context

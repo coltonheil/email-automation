@@ -10,6 +10,10 @@ import json
 import subprocess
 from typing import Dict, Any, Optional
 from retry_utils import retry_with_backoff, logger
+try:
+    from text_utils import clean_email_body, truncate_text
+except ImportError:
+    from .text_utils import clean_email_body, truncate_text
 
 
 class DraftGenerator:
@@ -69,7 +73,11 @@ class DraftGenerator:
         # Extract current email details
         current_email = sender_context['current_email']
         email_subject = current_email.get('subject', '(no subject)')
-        email_body = current_email.get('body', current_email.get('snippet', ''))
+        raw_body = current_email.get('body', current_email.get('snippet', ''))
+        
+        # CRITICAL: Clean and truncate body to prevent context overflow
+        # Email bodies can be 500KB+ of HTML - must limit to ~4K chars
+        email_body = clean_email_body(raw_body, max_chars=4000)
         
         # Build context summary
         context_summary = self._format_context_summary(sender_context)
