@@ -56,7 +56,11 @@ class EmailFetcher:
         
         # Extract messages from response
         if result and 'data' in result:
-            messages = result['data'].get('messages', [])
+            data = result['data']
+            # Composio wraps response in 'response_data'
+            if 'response_data' in data:
+                data = data['response_data']
+            messages = data.get('messages', [])
             return messages
         
         return []
@@ -86,13 +90,19 @@ class EmailFetcher:
         
         # Extract messages from response
         if result and 'data' in result:
+            data = result['data']
+            
+            # Composio wraps response in 'response_data'
+            if 'response_data' in data:
+                data = data['response_data']
+            
             # Try different possible response structures
-            if isinstance(result['data'], list):
-                return result['data']
-            elif 'value' in result['data']:
-                return result['data']['value']
-            elif 'messages' in result['data']:
-                return result['data']['messages']
+            if isinstance(data, list):
+                return data
+            elif 'value' in data:
+                return data['value']
+            elif 'messages' in data:
+                return data['messages']
         
         return []
     
@@ -120,7 +130,11 @@ class EmailFetcher:
             result = self._execute_action(action_name, account_id, input_params)
             
             if result and 'data' in result:
-                return result['data'].get('emails', [])
+                data = result['data']
+                # Composio wraps response in 'response_data'
+                if 'response_data' in data:
+                    data = data['response_data']
+                return data.get('emails', [])
         except Exception as e:
             # If action doesn't exist, try alternative approach
             print(f"Warning: Instantly fetch failed: {e}")
