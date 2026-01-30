@@ -19,8 +19,11 @@ interface Draft {
   subject: string;
   from_email: string;
   from_name: string;
+  body?: string;
+  snippet?: string;
   priority_score: number;
   priority_category: string;
+  received_at?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -29,6 +32,22 @@ const statusColors: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800',
   sent: 'bg-blue-100 text-blue-800',
 };
+
+// Simple HTML to text converter
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<style[^>]*>.*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, '\n')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\n\s*\n+/g, '\n\n')
+    .trim();
+}
 
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -39,6 +58,14 @@ export default function DraftsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editedText, setEditedText] = useState('');
+  
+  // AI Edit modal state
+  const [showAiEdit, setShowAiEdit] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  
+  // Show original email toggle
+  const [showOriginal, setShowOriginal] = useState(true);
 
   useEffect(() => {
     fetchDrafts();
@@ -65,6 +92,20 @@ export default function DraftsPage() {
     }
   };
 
+  const fetchDraftDetails = async (draftId: number) => {
+    try {
+      const res = await fetch(`/api/drafts/${draftId}`);
+      const data = await res.json();
+      if (data.success && data.draft) {
+        setSelectedDraft(data.draft);
+        setEditedText(data.draft.edited_text || data.draft.draft_text);
+        setEditMode(false);
+      }
+    } catch (error) {
+      console.error('Error fetching draft details:', error);
+    }
+  };
+
   const handleAction = async (action: string, extraData: Record<string, any> = {}) => {
     if (!selectedDraft) return;
     
@@ -80,13 +121,58 @@ export default function DraftsPage() {
       
       if (data.success) {
         fetchDrafts();
-        setSelectedDraft(null);
-        setEditMode(false);
+        if (selectedDraft) {
+          fetchDraftDetails(selectedDraft.id);
+        }
       }
     } catch (error) {
       console.error('Error performing action:', error);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleAiEdit = async () => {
+    if (!selectedDraft || !aiInstruction.trim()) return;
+    
+    setAiLoading(true);
+    try {
+      // This will be picked up by Clawdbot watching this channel
+      // For now, we'll show a message and close the modal
+      // The actual AI edit happens via Clawdbot
+      
+      // Post to the webhook that Clawdbot monitors
+      const res = await fetch('/api/notify-slack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: 'exec-approvals',
+          message: `🤖 **AI Edit Request** (Draft #${selectedDraft.id})
+
+**Email:** ${selectedDraft.subject}
+**From:** ${selectedDraft.from_name} <${selectedDraft.from_email}>
+
+**Instruction:** ${aiInstruction}
+
+**Current Draft:**
+\`\`\`
+${(selectedDraft.edited_text || selectedDraft.draft_text).slice(0, 500)}${(selectedDraft.edited_text || selectedDraft.draft_text).length > 500 ? '...' : ''}
+\`\`\`
+
+_Waiting for AI to process..._`
+        }),
+      });
+      
+      if (res.ok) {
+        alert('AI edit request sent! The draft will be updated shortly.\n\nCheck #exec-approvals for the response.');
+        setShowAiEdit(false);
+        setAiInstruction('');
+      }
+    } catch (error) {
+      console.error('Error requesting AI edit:', error);
+      alert('Error sending AI edit request');
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -137,7 +223,7 @@ export default function DraftsPage() {
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Draft List */}
-          <div className="w-1/2 border-r border-gray-200 overflow-auto">
+          <div className="w-1/3 border-r border-gray-200 overflow-auto">
             {loading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -154,11 +240,7 @@ export default function DraftsPage() {
                 {drafts.map(draft => (
                   <button
                     key={draft.id}
-                    onClick={() => {
-                      setSelectedDraft(draft);
-                      setEditedText(draft.edited_text || draft.draft_text);
-                      setEditMode(false);
-                    }}
+                    onClick={() => fetchDraftDetails(draft.id)}
                     className={`
                       w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors
                       ${selectedDraft?.id === draft.id ? 'bg-blue-50' : ''}
@@ -173,7 +255,7 @@ export default function DraftsPage() {
                           To: {draft.from_name || draft.from_email}
                         </p>
                         <p className="text-xs text-gray-400 mt-1 line-clamp-2">
-                          {draft.draft_text.slice(0, 100)}...
+                          {draft.draft_text.slice(0, 80)}...
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1">
@@ -183,11 +265,6 @@ export default function DraftsPage() {
                         `}>
                           {draft.status}
                         </span>
-                        {draft.feedback_score && (
-                          <span className="text-xs text-yellow-600">
-                            {'⭐'.repeat(draft.feedback_score)}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </button>
@@ -199,9 +276,9 @@ export default function DraftsPage() {
           {/* Draft Detail */}
           <div className="flex-1 overflow-auto">
             {selectedDraft ? (
-              <div className="p-6">
+              <div className="p-6 space-y-6">
                 {/* Header */}
-                <div className="mb-4">
+                <div>
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-lg font-medium text-gray-900">
                       Re: {selectedDraft.subject}
@@ -221,27 +298,83 @@ export default function DraftsPage() {
                   </p>
                 </div>
 
+                {/* Original Email Section */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setShowOriginal(!showOriginal)}
+                    className="w-full px-4 py-3 bg-gray-50 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      <span className="font-medium text-gray-700">Original Email</span>
+                      <span className="text-xs text-gray-500">
+                        (from {selectedDraft.from_name})
+                      </span>
+                    </div>
+                    <svg 
+                      className={`w-5 h-5 text-gray-400 transition-transform ${showOriginal ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showOriginal && (
+                    <div className="p-4 bg-white border-t border-gray-200">
+                      <div className="text-xs text-gray-500 mb-2">
+                        <strong>Subject:</strong> {selectedDraft.subject}
+                      </div>
+                      {selectedDraft.received_at && (
+                        <div className="text-xs text-gray-500 mb-3">
+                          <strong>Received:</strong> {new Date(selectedDraft.received_at).toLocaleString()}
+                        </div>
+                      )}
+                      <div className="text-sm text-gray-700 whitespace-pre-wrap max-h-64 overflow-auto bg-gray-50 p-3 rounded border">
+                        {selectedDraft.body 
+                          ? stripHtml(selectedDraft.body).slice(0, 2000) + (stripHtml(selectedDraft.body).length > 2000 ? '...' : '')
+                          : selectedDraft.snippet || '(No content)'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Draft Content */}
-                <div className="mb-4">
+                <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-700">Draft Response</h3>
-                    {selectedDraft.status === 'pending' && (
-                      <button
-                        onClick={() => setEditMode(!editMode)}
-                        className="text-sm text-blue-600 hover:text-blue-700"
-                      >
-                        {editMode ? 'Cancel Edit' : 'Edit Draft'}
-                      </button>
-                    )}
+                    <h3 className="text-sm font-medium text-gray-700">Your Draft Response</h3>
+                    <div className="flex gap-2">
+                      {selectedDraft.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => setShowAiEdit(true)}
+                            className="text-sm text-purple-600 hover:text-purple-700 flex items-center gap-1 px-3 py-1 rounded-md bg-purple-50 hover:bg-purple-100"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Edit with AI
+                          </button>
+                          <button
+                            onClick={() => setEditMode(!editMode)}
+                            className="text-sm text-blue-600 hover:text-blue-700 px-3 py-1 rounded-md bg-blue-50 hover:bg-blue-100"
+                          >
+                            {editMode ? 'Cancel' : 'Manual Edit'}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   {editMode ? (
                     <textarea
                       value={editedText}
                       onChange={(e) => setEditedText(e.target.value)}
-                      className="w-full h-64 p-4 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full h-64 p-4 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
                     />
                   ) : (
-                    <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">
+                    <div className="bg-blue-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap border border-blue-100">
                       {selectedDraft.edited_text || selectedDraft.draft_text}
                     </div>
                   )}
@@ -267,7 +400,7 @@ export default function DraftsPage() {
                     >
                       ✗ Reject
                     </button>
-                    {editMode && editedText !== selectedDraft.draft_text && (
+                    {editMode && editedText !== (selectedDraft.edited_text || selectedDraft.draft_text) && (
                       <button
                         onClick={() => handleAction('edit', { text: editedText })}
                         disabled={actionLoading}
@@ -299,30 +432,6 @@ export default function DraftsPage() {
                     </button>
                   </div>
                 )}
-
-                {/* Rating */}
-                {(selectedDraft.status === 'sent' || selectedDraft.status === 'approved') && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h3 className="text-sm font-medium text-gray-700 mb-2">Rate Draft Quality</h3>
-                    <div className="flex gap-2">
-                      {[1, 2, 3, 4, 5].map(score => (
-                        <button
-                          key={score}
-                          onClick={() => handleAction('rate', { score })}
-                          className={`
-                            w-10 h-10 rounded-lg text-lg transition-colors
-                            ${selectedDraft.feedback_score === score 
-                              ? 'bg-yellow-400 text-white' 
-                              : 'bg-gray-100 hover:bg-yellow-100'
-                            }
-                          `}
-                        >
-                          ⭐
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="h-full flex items-center justify-center text-gray-400">
@@ -338,6 +447,103 @@ export default function DraftsPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Edit Modal */}
+      {showAiEdit && selectedDraft && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Edit with AI</h3>
+                <p className="text-sm text-gray-500">Ask Opus to modify your draft</p>
+              </div>
+              <button
+                onClick={() => setShowAiEdit(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4 overflow-auto max-h-[60vh]">
+              {/* Current Draft Preview */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Current Draft</label>
+                <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 max-h-32 overflow-auto">
+                  {(selectedDraft.edited_text || selectedDraft.draft_text).slice(0, 300)}
+                  {(selectedDraft.edited_text || selectedDraft.draft_text).length > 300 && '...'}
+                </div>
+              </div>
+              
+              {/* Instruction Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  What would you like to change?
+                </label>
+                <textarea
+                  value={aiInstruction}
+                  onChange={(e) => setAiInstruction(e.target.value)}
+                  placeholder="e.g., Make it shorter and more direct, add a question about their timeline, make the tone more formal..."
+                  className="w-full h-32 p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+              
+              {/* Quick Actions */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quick Edits</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    'Make it shorter',
+                    'Make it more formal',
+                    'Make it friendlier',
+                    'Add a question',
+                    'Add a call to action',
+                    'Simplify the language',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => setAiInstruction(suggestion)}
+                      className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowAiEdit(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAiEdit}
+                disabled={aiLoading || !aiInstruction.trim()}
+                className="px-6 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Update Draft
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

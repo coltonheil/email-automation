@@ -22,40 +22,62 @@ const execAsync = promisify(exec);
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      draft_id,
-      email_subject,
-      from_email,
-      from_name,
-      priority_score,
-      draft_text,
-      relationship_type,
-    } = body;
-
-    // Format Slack message
-    const message = formatSlackMessage({
-      draft_id,
-      email_subject,
-      from_email,
-      from_name,
-      priority_score,
-      draft_text,
-      relationship_type,
-    });
-
-    // Post to Slack via Clawdbot message tool
-    // This will be called from the Clawdbot context
-    const slackChannel = 'exec-approvals';
     
-    // For now, return the formatted message
-    // In production, this would use the Clawdbot message tool
+    // Support both custom messages and draft notifications
+    let message: string;
+    let channel: string;
+    
+    if (body.message) {
+      // Custom message (e.g., AI edit request)
+      message = body.message;
+      channel = body.channel || 'exec-approvals';
+    } else {
+      // Legacy draft notification format
+      const {
+        draft_id,
+        email_subject,
+        from_email,
+        from_name,
+        priority_score,
+        draft_text,
+        relationship_type,
+      } = body;
+      
+      message = formatSlackMessage({
+        draft_id,
+        email_subject,
+        from_email,
+        from_name,
+        priority_score,
+        draft_text,
+        relationship_type,
+      });
+      channel = 'exec-approvals';
+    }
+
+    // Write to a file that Clawdbot can pick up
+    // This is a simple IPC mechanism
+    const fs = await import('fs').then(m => m.promises);
+    const path = await import('path');
+    
+    const notifyDir = path.join(process.cwd(), '..', 'data');
+    const notifyFile = path.join(notifyDir, 'slack_notify.json');
+    
+    // Ensure directory exists
+    await fs.mkdir(notifyDir, { recursive: true });
+    
+    // Write notification request
+    await fs.writeFile(notifyFile, JSON.stringify({
+      channel,
+      message,
+      timestamp: new Date().toISOString()
+    }, null, 2));
     
     return NextResponse.json({
       success: true,
-      message: 'Draft notification formatted (Slack integration pending)',
-      slack_message: message,
-      channel: slackChannel,
-      draft_id,
+      message: 'Notification queued for Slack',
+      channel,
+      file: notifyFile
     });
   } catch (error: any) {
     console.error('Error posting to Slack:', error);
