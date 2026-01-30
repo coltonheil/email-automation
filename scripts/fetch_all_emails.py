@@ -52,7 +52,7 @@ class UnifiedEmailAggregator:
         self.emails = []
         self.seen_dedup_keys = set()
     
-    def fetch_all(self, mode: str = 'unread', hours: int = None, limit_per_account: int = 50) -> List[Dict[str, Any]]:
+    def fetch_all(self, mode: str = 'unread', hours: int = None, limit_per_account: int = 50, silent: bool = False) -> List[Dict[str, Any]]:
         """
         Fetch emails from all accounts
         
@@ -60,14 +60,17 @@ class UnifiedEmailAggregator:
             mode: 'unread', 'recent', or 'all'
             hours: If mode='recent', how many hours to look back
             limit_per_account: Max emails per account
+            silent: If True, suppress progress output
             
         Returns:
             List of normalized, scored emails
         """
         self.emails = []
         self.seen_dedup_keys = set()
+        self.silent = silent
         
-        print(f"🔍 Fetching emails (mode: {mode}, limit: {limit_per_account}/account)...\n")
+        if not silent:
+            print(f"🔍 Fetching emails (mode: {mode}, limit: {limit_per_account}/account)...\n")
         
         # Fetch from Gmail accounts
         for account in self.config.get('gmail', []):
@@ -84,8 +87,9 @@ class UnifiedEmailAggregator:
         # Sort by priority score (highest first)
         self.emails.sort(key=lambda e: e['priority_score'], reverse=True)
         
-        print(f"\n✅ Total emails fetched: {len(self.emails)}")
-        print(f"📊 Breakdown: Urgent={self._count_by_category('urgent')}, Normal={self._count_by_category('normal')}, Low={self._count_by_category('low')}\n")
+        if not silent:
+            print(f"\n✅ Total emails fetched: {len(self.emails)}")
+            print(f"📊 Breakdown: Urgent={self._count_by_category('urgent')}, Normal={self._count_by_category('normal')}, Low={self._count_by_category('low')}\n")
         
         return self.emails
     
@@ -95,7 +99,8 @@ class UnifiedEmailAggregator:
         account_id = account['composio_account_id']
         description = account.get('description', account['id'])
         
-        print(f"📧 Fetching from {description} ({provider})...", end=' ')
+        if not self.silent:
+            print(f"📧 Fetching from {description} ({provider})...", end=' ')
         
         try:
             # Fetch based on mode
@@ -138,10 +143,12 @@ class UnifiedEmailAggregator:
                 self.emails.append(normalized)
                 added_count += 1
             
-            print(f"✅ {added_count} emails")
+            if not self.silent:
+                print(f"✅ {added_count} emails")
         
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
+            if not self.silent:
+                print(f"❌ Error: {str(e)}")
     
     def _count_by_category(self, category: str) -> int:
         """Count emails in a priority category"""
@@ -236,7 +243,8 @@ def main():
     emails = aggregator.fetch_all(
         mode=args.mode,
         hours=args.hours,
-        limit_per_account=args.limit
+        limit_per_account=args.limit,
+        silent=args.json
     )
     
     # Output
