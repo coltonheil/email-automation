@@ -316,6 +316,230 @@ class EmailDatabase:
             return from_field.split('<')[0].strip().strip('"')
         return ''
     
+    # Draft Approval Workflow Methods
+    
+    def approve_draft(
+        self,
+        draft_id: int,
+        approved_by: str = "user",
+        notes: Optional[str] = None
+    ) -> bool:
+        """
+        Mark draft as approved
+        
+        Args:
+            draft_id: Draft ID
+            approved_by: Who approved it
+            notes: Optional approval notes
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # Update draft
+        cursor.execute("""
+            UPDATE draft_responses
+            SET approved_at = ?, approved_by = ?, status = 'approved'
+            WHERE id = ?
+        """, (now, approved_by, draft_id))
+        
+        # Log to history
+        cursor.execute("""
+            INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes)
+            VALUES (?, 'approved', ?, ?, ?)
+        """, (draft_id, approved_by, now, notes))
+        
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def reject_draft(
+        self,
+        draft_id: int,
+        rejected_by: str = "user",
+        reason: Optional[str] = None,
+        notes: Optional[str] = None
+    ) -> bool:
+        """
+        Mark draft as rejected
+        
+        Args:
+            draft_id: Draft ID
+            rejected_by: Who rejected it
+            reason: Rejection reason
+            notes: Optional rejection notes
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # Update draft
+        cursor.execute("""
+            UPDATE draft_responses
+            SET rejected_at = ?, rejected_by = ?, rejection_reason = ?, status = 'rejected'
+            WHERE id = ?
+        """, (now, rejected_by, reason, draft_id))
+        
+        # Log to history
+        cursor.execute("""
+            INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes)
+            VALUES (?, 'rejected', ?, ?, ?)
+        """, (draft_id, rejected_by, now, notes or reason))
+        
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def edit_draft(
+        self,
+        draft_id: int,
+        edited_text: str,
+        edited_by: str = "user",
+        notes: Optional[str] = None
+    ) -> bool:
+        """
+        Record user's edited version of draft
+        
+        Args:
+            draft_id: Draft ID
+            edited_text: User's edited text
+            edited_by: Who edited it
+            notes: Optional edit notes
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # Update draft
+        cursor.execute("""
+            UPDATE draft_responses
+            SET edited_text = ?
+            WHERE id = ?
+        """, (edited_text, draft_id))
+        
+        # Log to history
+        metadata = json.dumps({
+            'edited_length': len(edited_text),
+            'original_length': self._get_draft_length(draft_id)
+        })
+        
+        cursor.execute("""
+            INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes, metadata)
+            VALUES (?, 'edited', ?, ?, ?, ?)
+        """, (draft_id, edited_by, now, notes, metadata))
+        
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def mark_draft_sent(
+        self,
+        draft_id: int,
+        sent_via: str = "manual",
+        sent_by: str = "user",
+        notes: Optional[str] = None
+    ) -> bool:
+        """
+        Mark draft as sent
+        
+        Args:
+            draft_id: Draft ID
+            sent_via: How it was sent (manual, gmail_ui, etc.)
+            sent_by: Who sent it
+            notes: Optional notes
+            
+        Returns:
+            True if successful
+        """
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # Update draft
+        cursor.execute("""
+            UPDATE draft_responses
+            SET sent_at = ?, sent_via = ?, status = 'sent'
+            WHERE id = ?
+        """, (now, sent_via, draft_id))
+        
+        # Log to history
+        cursor.execute("""
+            INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes, metadata)
+            VALUES (?, 'sent', ?, ?, ?, ?)
+        """, (draft_id, sent_by, now, notes, json.dumps({'via': sent_via})))
+        
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def rate_draft(
+        self,
+        draft_id: int,
+        score: int,
+        feedback_notes: Optional[str] = None,
+        rated_by: str = "user"
+    ) -> bool:
+        """
+        Rate draft quality (1-5)
+        
+        Args:
+            draft_id: Draft ID
+            score: Rating score (1-5)
+            feedback_notes: Optional feedback
+            rated_by: Who rated it
+            
+        Returns:
+            True if successful
+        """
+        if not 1 <= score <= 5:
+            raise ValueError("Score must be between 1 and 5")
+        
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # Update draft
+        cursor.execute("""
+            UPDATE draft_responses
+            SET feedback_score = ?, feedback_notes = ?
+            WHERE id = ?
+        """, (score, feedback_notes, draft_id))
+        
+        # Log to history
+        cursor.execute("""
+            INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes, metadata)
+            VALUES (?, 'rated', ?, ?, ?, ?)
+        """, (draft_id, rated_by, now, feedback_notes, json.dumps({'score': score})))
+        
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def get_draft_history(self, draft_id: int) -> List[Dict[str, Any]]:
+        """
+        Get approval history for a draft
+        
+        Args:
+            draft_id: Draft ID
+            
+        Returns:
+            List of history entries
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM draft_approval_history
+            WHERE draft_id = ?
+            ORDER BY performed_at DESC
+        """, (draft_id,))
+        
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def _get_draft_length(self, draft_id: int) -> int:
+        """Get length of original draft text"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT draft_text FROM draft_responses WHERE id = ?", (draft_id,))
+        row = cursor.fetchone()
+        return len(row['draft_text']) if row else 0
+    
     def close(self):
         """Close database connection"""
         if self.conn:
