@@ -80,7 +80,7 @@ class EmailFetcher:
         action_name = "OUTLOOK_OUTLOOK_LIST_MESSAGES"
         
         input_params = {
-            "max_results": limit
+            "top": limit  # OData standard for MS Graph API
         }
         
         if filter_query:
