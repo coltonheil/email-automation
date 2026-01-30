@@ -2,12 +2,14 @@
 """
 Draft Generator
 Uses Claude to generate contextual email response drafts via Clawdbot
+With robust error handling and retry logic
 """
 
 import os
 import json
 import subprocess
 from typing import Dict, Any, Optional
+from retry_utils import retry_with_backoff, logger
 
 
 class DraftGenerator:
@@ -146,16 +148,27 @@ class DraftGenerator:
         
         return '\n'.join(parts)
     
+    @retry_with_backoff(
+        max_attempts=3,
+        initial_delay=3.0,
+        exceptions=(subprocess.TimeoutExpired, subprocess.CalledProcessError, ConnectionError)
+    )
     def _call_claude_via_clawdbot(self, prompt: str) -> Dict[str, Any]:
         """
         Call Claude via Clawdbot (uses your Claude Max subscription)
+        With automatic retry on failure
         
         Args:
             prompt: Full prompt for Claude
             
         Returns:
             Response dict with text and metadata
+            
+        Raises:
+            Exception: On permanent failure after all retries
         """
+        logger.info(f"Calling Claude Opus via Clawdbot (session: {self.session_label})")
+        
         try:
             # Build clawdbot command to send message via sessions_send
             # This leverages your existing Claude Max subscription
@@ -176,10 +189,18 @@ class DraftGenerator:
             )
             
             if result.returncode != 0:
-                raise Exception(f"Clawdbot error: {result.stderr}")
+                error_msg = result.stderr.strip()
+                logger.error(f"Clawdbot command failed: {error_msg}")
+                raise Exception(f"Clawdbot error: {error_msg}")
             
             # Parse response (Clawdbot returns plain text response)
             response_text = result.stdout.strip()
+            
+            if not response_text:
+                logger.error("Claude returned empty response")
+                raise Exception("Empty response from Claude")
+            
+            logger.info(f"Claude draft generated successfully ({len(response_text)} chars)")
             
             # Return in API-like format
             return {
@@ -191,6 +212,8 @@ class DraftGenerator:
             }
         
         except subprocess.TimeoutExpired:
+            logger.error("Claude request timed out after 90 seconds")
             raise Exception("Claude request timed out after 90 seconds")
         except Exception as e:
+            logger.error(f"Failed to call Claude via Clawdbot: {str(e)}")
             raise Exception(f"Failed to call Claude via Clawdbot: {str(e)}")

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Email Fetcher - Pulls emails from all connected accounts
+With robust error handling and retry logic
 """
 
 import os
@@ -9,6 +10,7 @@ import urllib.request
 import urllib.parse
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from retry_utils import retry_with_backoff, safe_api_call, logger
 
 
 class EmailFetcher:
@@ -126,9 +128,14 @@ class EmailFetcher:
         
         return []
     
+    @retry_with_backoff(
+        max_attempts=3,
+        initial_delay=2.0,
+        exceptions=(urllib.error.URLError, urllib.error.HTTPError, ConnectionError, TimeoutError)
+    )
     def _execute_action(self, action_name: str, account_id: str, input_params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Execute a Composio action
+        Execute a Composio action with automatic retry on failure
         
         Args:
             action_name: Name of the action (e.g., "GMAIL_LIST_EMAILS")
@@ -137,6 +144,9 @@ class EmailFetcher:
             
         Returns:
             Action result or None on error
+            
+        Raises:
+            Exception: On permanent failure after all retries
         """
         url = f"{self.base_url}/actions/{action_name}/execute"
         
@@ -152,6 +162,8 @@ class EmailFetcher:
             'Accept': 'application/json'
         }
         
+        logger.info(f"Executing Composio action: {action_name} (account: {account_id[:8]}...)")
+        
         try:
             req = urllib.request.Request(
                 url,
@@ -165,16 +177,21 @@ class EmailFetcher:
                 
                 if not result.get('successful', False):
                     error_msg = result.get('message', 'Unknown error')
+                    logger.error(f"Composio action {action_name} failed: {error_msg}")
                     raise Exception(f"Action failed: {error_msg}")
                 
+                logger.info(f"Composio action {action_name} succeeded")
                 return result
         
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8')
+            logger.error(f"HTTP error {e.code} for {action_name}: {error_body}")
             raise Exception(f"HTTP {e.code}: {error_body}")
         except urllib.error.URLError as e:
+            logger.error(f"Network error for {action_name}: {e.reason}")
             raise Exception(f"Network error: {e.reason}")
         except Exception as e:
+            logger.error(f"Action {action_name} execution failed: {str(e)}")
             raise Exception(f"Action execution failed: {str(e)}")
     
     def fetch_unread_only(self, provider: str, account_id: str, limit: int = 50) -> List[Dict[str, Any]]:

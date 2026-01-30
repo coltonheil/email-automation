@@ -5,6 +5,8 @@ Analyzes urgent emails and generates draft responses with sender context
 Posts drafts to Slack #exec-approvals for manual review
 
 SAFETY: This script NEVER sends emails. It only creates drafts for review.
+
+Features robust error handling - continues processing even if individual emails fail.
 """
 
 import os
@@ -19,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lib'))
 from database import EmailDatabase
 from sender_analyzer import SenderAnalyzer
 from draft_generator import DraftGenerator
+from retry_utils import ErrorCollector, logger
 
 
 def main():
@@ -66,7 +69,11 @@ def main():
     # Initialize draft generator (uses Clawdbot + Claude Max subscription)
     generator = DraftGenerator(session_label="email-automation")
     
+    # Error collector for graceful handling
+    errors = ErrorCollector()
     drafts_created = []
+    
+    logger.info(f"Starting auto-draft for {len(emails_to_draft)} emails")
     
     for email in emails_to_draft:
         sender_email = email.get('from_email')
@@ -135,8 +142,16 @@ def main():
                           f"{context.get('writing_style')} style")
         
         except Exception as e:
+            # Collect error but continue processing other emails
+            errors.add(f"Email {email_id} ({subject[:40]}...)", e)
             if not args.json:
-                print(f"   ❌ Error: {str(e)}")
+                print(f"   ❌ Error: {str(e)} (continuing...)")
+    
+    # Report errors if any
+    if errors.has_errors():
+        logger.warning(f"Completed with {errors.count()} errors")
+        if not args.json:
+            print(f"\n⚠️  Completed with {errors.count()} errors (see logs/email-automation.log)")
     
     # Output results
     if args.json:

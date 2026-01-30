@@ -1,0 +1,80 @@
+2026-01-30 14:12:26,939 - retry_utils - ERROR - Error in Operation 1: Error 1
+NoneType: None
+2026-01-30 14:12:26,940 - retry_utils - ERROR - Error in Operation 2: Error 2
+NoneType: None
+2026-01-30 14:12:26,940 - retry_utils - ERROR - Error in Test 1: Fail 1
+NoneType: None
+2026-01-30 14:12:26,940 - retry_utils - ERROR - Error in Test 2: Fail 2
+NoneType: None
+2026-01-30 14:12:26,940 - retry_utils - ERROR - Error report:
+Collected 2 errors:
+  - Test 1: Fail 1
+  - Test 2: Fail 2
+2026-01-30 14:12:26,940 - retry_utils - ERROR - Error in Test: Error
+NoneType: None
+2026-01-30 14:12:26,940 - retry_utils - ERROR - Error report:
+Collected 1 errors:
+  - Test: Error
+2026-01-30 14:12:26,940 - retry_utils - WARNING - always_fails failed (attempt 1/3): Permanent failure. Retrying in 0.1s...
+2026-01-30 14:12:27,070 - retry_utils - WARNING - always_fails failed (attempt 2/3): Permanent failure. Retrying in 0.2s...
+2026-01-30 14:12:27,393 - retry_utils - ERROR - always_fails failed after 3 attempts: Permanent failure
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 63, in always_fails
+    raise ValueError("Permanent failure")
+ValueError: Permanent failure
+2026-01-30 14:12:27,396 - retry_utils - WARNING - succeeds_on_third_try failed (attempt 1/3): Temporary failure. Retrying in 0.1s...
+2026-01-30 14:12:27,525 - retry_utils - WARNING - succeeds_on_third_try failed (attempt 2/3): Temporary failure. Retrying in 0.2s...
+2026-01-30 14:12:27,809 - retry_utils - INFO - Starting: Test operation (attempt 1/1)
+2026-01-30 14:12:27,809 - retry_utils - ERROR - Failed permanently: Test operation after 1 attempts: API failed
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 173, in test_context_manager_failure
+    raise Exception("API failed")
+Exception: API failed
+2026-01-30 14:12:27,810 - retry_utils - INFO - Starting: Test operation (attempt 1/3)
+2026-01-30 14:12:27,811 - retry_utils - INFO - Completed: Test operation
+2026-01-30 14:12:27,811 - retry_utils - WARNING - wrapped failed (attempt 1/3): API error. Retrying in 1.0s...
+2026-01-30 14:12:28,818 - retry_utils - WARNING - wrapped failed (attempt 2/3): API error. Retrying in 2.0s...
+2026-01-30 14:12:30,954 - retry_utils - ERROR - wrapped failed after 3 attempts: API error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 100, in failing_func
+    raise Exception("API error")
+Exception: API error
+2026-01-30 14:12:30,956 - retry_utils - ERROR - failing_func failed permanently: API error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 203, in safe_api_call
+    return wrapped()
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 100, in failing_func
+    raise Exception("API error")
+Exception: API error
+2026-01-30 14:12:30,957 - retry_utils - WARNING - wrapped failed (attempt 1/3): Error. Retrying in 1.0s...
+2026-01-30 14:12:32,066 - retry_utils - WARNING - wrapped failed (attempt 2/3): Error. Retrying in 2.0s...
+2026-01-30 14:12:34,171 - retry_utils - ERROR - wrapped failed after 3 attempts: Error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 108, in failing_func
+    raise Exception("Error")
+Exception: Error
+2026-01-30 14:12:34,171 - retry_utils - ERROR - failing_func failed permanently: Error
+Traceback (most recent call last):
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 203, in safe_api_call
+    return wrapped()
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 62, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/../lib/retry_utils.py", line 200, in wrapped
+    return func(*args, **kwargs)
+  File "/Users/coltonheil/clawd/projects/email-automation/tests/test_error_handling.py", line 108, in failing_func
+    raise Exception("Error")
+Exception: Error
