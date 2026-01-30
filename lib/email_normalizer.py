@@ -36,40 +36,62 @@ class EmailNormalizer:
     @staticmethod
     def _normalize_gmail(email: Dict[str, Any], account_id: str) -> Dict[str, Any]:
         """Normalize Gmail message from Composio"""
-        # Gmail through Composio provides structured data
-        payload = email.get('payload', {})
-        headers = {h['name']: h['value'] for h in payload.get('headers', [])}
+        # Composio Gmail uses direct fields (not nested headers)
+        msg_id = email.get('messageId') or email.get('id')
         
-        # Extract body
-        body = EmailNormalizer._extract_gmail_body(payload)
+        # Extract body from messageText or payload
+        body = email.get('messageText', '')
+        if not body:
+            payload = email.get('payload', {})
+            body = EmailNormalizer._extract_gmail_body(payload)
         
         # Parse date
-        date_str = email.get('internalDate')
+        date_str = email.get('messageTimestamp') or email.get('internalDate')
         if date_str:
-            # Gmail internalDate is milliseconds since epoch
-            timestamp = int(date_str) / 1000
-            received_at = datetime.fromtimestamp(timestamp)
+            try:
+                if 'T' in str(date_str):
+                    # ISO format
+                    received_at = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                else:
+                    # Milliseconds since epoch
+                    timestamp = int(date_str) / 1000
+                    received_at = datetime.fromtimestamp(timestamp)
+            except:
+                received_at = datetime.now()
         else:
             received_at = datetime.now()
         
+        # Get labels
+        labels = email.get('labelIds', [])
+        if isinstance(labels, str):
+            # Parse string representation of list
+            labels = [l.strip().strip("'") for l in labels.strip('[]').split(',') if l.strip()]
+        
+        # Get preview/snippet
+        preview = email.get('preview', {})
+        if isinstance(preview, dict):
+            snippet = preview.get('body', email.get('snippet', ''))
+        else:
+            snippet = str(preview) if preview else ''
+        
         return {
-            'id': f"gmail_{account_id}_{email.get('id')}",
+            'id': f"gmail_{account_id}_{msg_id}",
             'provider': 'gmail',
             'account_id': account_id,
-            'message_id': email.get('id'),
+            'message_id': msg_id,
             'thread_id': email.get('threadId'),
-            'subject': headers.get('Subject', '(no subject)'),
-            'from': headers.get('From', ''),
-            'to': headers.get('To', ''),
-            'cc': headers.get('Cc', ''),
-            'bcc': headers.get('Bcc', ''),
+            'subject': email.get('subject', '(no subject)'),
+            'from': email.get('sender', ''),
+            'to': email.get('to', ''),
+            'cc': email.get('cc', ''),
+            'bcc': email.get('bcc', ''),
             'body': body,
-            'snippet': email.get('snippet', ''),
-            'labels': email.get('labelIds', []),
-            'is_unread': 'UNREAD' in email.get('labelIds', []),
-            'is_important': 'IMPORTANT' in email.get('labelIds', []),
-            'received_at': received_at.isoformat(),
-            'has_attachments': EmailNormalizer._has_attachments_gmail(payload),
+            'snippet': snippet[:500] if snippet else '',
+            'labels': labels,
+            'is_unread': 'UNREAD' in labels,
+            'is_important': 'IMPORTANT' in labels,
+            'received_at': received_at.isoformat() if hasattr(received_at, 'isoformat') else str(received_at),
+            'has_attachments': len(email.get('attachmentList', [])) > 0,
             'raw_data': email
         }
     

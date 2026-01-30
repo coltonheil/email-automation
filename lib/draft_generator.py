@@ -148,72 +148,81 @@ class DraftGenerator:
         
         return '\n'.join(parts)
     
-    @retry_with_backoff(
-        max_attempts=3,
-        initial_delay=3.0,
-        exceptions=(subprocess.TimeoutExpired, subprocess.CalledProcessError, ConnectionError)
-    )
     def _call_claude_via_clawdbot(self, prompt: str) -> Dict[str, Any]:
         """
-        Call Claude via Clawdbot (uses your Claude Max subscription)
-        With automatic retry on failure
+        Generate draft using Claude API directly
+        
+        Uses ANTHROPIC_API_KEY from environment if available,
+        otherwise raises an error indicating manual draft generation is needed.
         
         Args:
             prompt: Full prompt for Claude
             
         Returns:
             Response dict with text and metadata
-            
-        Raises:
-            Exception: On permanent failure after all retries
         """
-        logger.info(f"Calling Claude Opus via Clawdbot (session: {self.session_label})")
+        import urllib.request
+        import urllib.error
+        
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        
+        if not api_key:
+            # No API key - drafts must be generated manually via Clawdbot agent
+            logger.warning("No ANTHROPIC_API_KEY set. Drafts must be generated via Clawdbot agent.")
+            raise Exception(
+                "No ANTHROPIC_API_KEY available. "
+                "Ask Clawdbot to generate drafts manually, or set ANTHROPIC_API_KEY."
+            )
+        
+        logger.info(f"Calling Claude {self.model} via Anthropic API")
+        
+        headers = {
+            'x-api-key': api_key,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+        }
+        
+        # Map model alias to full name
+        model_name = self.model
+        if model_name == 'opus':
+            model_name = 'claude-opus-4-0-20250514'
+        elif model_name == 'sonnet':
+            model_name = 'claude-sonnet-4-0-20250514'
+        
+        payload = {
+            'model': model_name,
+            'max_tokens': 1024,
+            'messages': [{'role': 'user', 'content': prompt}],
+            'temperature': 0.7,
+        }
         
         try:
-            # Build clawdbot command to send message via sessions_send
-            # This leverages your existing Claude Max subscription
-            cmd = [
-                'clawdbot',
-                'sessions_send',
-                '--label', self.session_label,
-                '--model', self.model,
-                '--timeout', '60',
-                '--message', prompt
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=90  # Extra buffer for network + processing
+            req = urllib.request.Request(
+                'https://api.anthropic.com/v1/messages',
+                data=json.dumps(payload).encode('utf-8'),
+                headers=headers,
+                method='POST'
             )
             
-            if result.returncode != 0:
-                error_msg = result.stderr.strip()
-                logger.error(f"Clawdbot command failed: {error_msg}")
-                raise Exception(f"Clawdbot error: {error_msg}")
-            
-            # Parse response (Clawdbot returns plain text response)
-            response_text = result.stdout.strip()
-            
-            if not response_text:
-                logger.error("Claude returned empty response")
-                raise Exception("Empty response from Claude")
-            
-            logger.info(f"Claude draft generated successfully ({len(response_text)} chars)")
-            
-            # Return in API-like format
-            return {
-                'content': [{'text': response_text}],
-                'usage': {
-                    'input_tokens': 0,  # Clawdbot doesn't expose these
-                    'output_tokens': 0
+            with urllib.request.urlopen(req, timeout=60) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                
+                response_text = result.get('content', [{}])[0].get('text', '')
+                
+                if not response_text:
+                    raise Exception("Empty response from Claude")
+                
+                logger.info(f"Draft generated successfully ({len(response_text)} chars)")
+                
+                return {
+                    'content': [{'text': response_text}],
+                    'usage': result.get('usage', {})
                 }
-            }
         
-        except subprocess.TimeoutExpired:
-            logger.error("Claude request timed out after 90 seconds")
-            raise Exception("Claude request timed out after 90 seconds")
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            logger.error(f"Claude API error {e.code}: {error_body}")
+            raise Exception(f"Claude API error: {error_body}")
         except Exception as e:
-            logger.error(f"Failed to call Claude via Clawdbot: {str(e)}")
-            raise Exception(f"Failed to call Claude via Clawdbot: {str(e)}")
+            logger.error(f"Failed to call Claude API: {str(e)}")
+            raise
