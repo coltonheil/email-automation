@@ -44,9 +44,9 @@ class EmailFetcher:
         action_name = "GMAIL_FETCH_EMAILS"
         
         input_params = {
-            "max_results": limit,
-            "verbose": True,
-            "include_payload": True
+            "max_results": min(limit, 20),  # Cap at 20 to avoid 413 payload errors
+            "verbose": False,
+            "include_payload": False  # Fetch metadata only, get body separately if needed
         }
         
         if query:

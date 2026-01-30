@@ -36,6 +36,9 @@ class EmailNormalizer:
     @staticmethod
     def _normalize_gmail(email: Dict[str, Any], account_id: str) -> Dict[str, Any]:
         """Normalize Gmail message from Composio"""
+        if not email:
+            raise ValueError("Empty email object")
+        
         # Composio Gmail uses direct fields (not nested headers)
         msg_id = email.get('messageId') or email.get('id')
         
@@ -68,9 +71,11 @@ class EmailNormalizer:
             labels = [l.strip().strip("'") for l in labels.strip('[]').split(',') if l.strip()]
         
         # Get preview/snippet
-        preview = email.get('preview', {})
-        if isinstance(preview, dict):
-            snippet = preview.get('body', email.get('snippet', ''))
+        preview = email.get('preview')
+        if preview is None:
+            snippet = email.get('snippet', '')
+        elif isinstance(preview, dict):
+            snippet = preview.get('body', '') or email.get('snippet', '')
         else:
             snippet = str(preview) if preview else ''
         
@@ -169,6 +174,9 @@ class EmailNormalizer:
     @staticmethod
     def _extract_gmail_body(payload: Dict[str, Any]) -> str:
         """Extract email body from Gmail payload"""
+        if not payload:
+            return ""
+        
         # Check for text/plain part first
         parts = payload.get('parts', [])
         
