@@ -1,0 +1,49 @@
+{
+  "gmail": [
+    {
+      "id": "gmail_primary",
+      "provider": "gmail",
+      "composio_account_id": "481bf3fb-1b5d-4dac-9395-c97ead2a404a",
+      "priority_weight": 1.0,
+      "check_frequency_hours": 4,
+      "description": "Primary Gmail account"
+    }
+  ],
+  "outlook": [
+    {
+      "id": "outlook_1",
+      "provider": "outlook",
+      "composio_account_id": "4f48e4cd-2250-4018-8abc-ff633f144967",
+      "priority_weight": 1.0,
+      "check_frequency_hours": 2,
+      "description": "Outlook account 1"
+    },
+    {
+      "id": "outlook_2",
+      "provider": "outlook",
+      "composio_account_id": "e662c7fe-fb04-44c3-84e0-25275d1a313f",
+      "priority_weight": 1.0,
+      "check_frequency_hours": 2,
+      "description": "Outlook account 2"
+    },
+    {
+      "id": "outlook_3",
+      "provider": "outlook",
+      "composio_account_id": "cabb6ded-a951-4447-8149-d2f58ae9f14f",
+      "priority_weight": 1.0,
+      "check_frequency_hours": 2,
+      "description": "Outlook account 3"
+    }
+  ],
+  "instantly": [
+    {
+      "id": "instantly_workspace",
+      "provider": "instantly",
+      "composio_account_id": "03304007-f97f-42a6-be6b-03eb15e8c0c0",
+      "priority_weight": 0.8,
+      "check_frequency_hours": 2,
+      "description": "Instantly workspace (4 sending accounts)",
+      "note": "Single integration that accesses multiple sending accounts"
+    }
+  ]
+}
