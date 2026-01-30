@@ -22,6 +22,7 @@ from database import EmailDatabase
 from sender_analyzer import SenderAnalyzer
 from draft_generator import DraftGenerator
 from retry_utils import ErrorCollector, logger
+from rate_limiter import RateLimiter
 
 
 def main():
@@ -69,6 +70,10 @@ def main():
     # Initialize draft generator (uses Clawdbot + Claude Max subscription)
     generator = DraftGenerator(session_label="email-automation")
     
+    # Initialize rate limiter
+    rate_limiter = RateLimiter(max_drafts_per_run=args.limit)
+    rate_limiter.reset_run_counter()
+    
     # Error collector for graceful handling
     errors = ErrorCollector()
     drafts_created = []
@@ -85,6 +90,15 @@ def main():
             print(f"   From: {sender_email}")
         
         try:
+            # Check rate limits
+            can_draft, reason = rate_limiter.can_generate_draft(email_id, sender_email)
+            
+            if not can_draft:
+                if not args.json:
+                    print(f"   ⏭️  Skipping: {reason}")
+                logger.info(f"Skipped email {email_id}: {reason}")
+                continue
+            
             # Build sender context
             if not args.json:
                 print("   📊 Analyzing sender context...")
@@ -92,28 +106,53 @@ def main():
             context = analyzer.build_sender_context(sender_email, email)
             
             if not args.dry_run:
+                # Enforce rate limit delay
+                rate_limiter.enforce_delay()
                 # Generate draft
                 if not args.json:
-                    print("   ✍️  Generating draft with Claude...")
+                    print("   ✍️  Generating draft with Claude Opus...")
                 
-                draft_result = generator.generate_draft(
-                    sender_context=context,
-                    user_writing_style="professional and concise"
-                )
+                try:
+                    draft_result = generator.generate_draft(
+                        sender_context=context,
+                        user_writing_style="professional and concise"
+                    )
+                    
+                    draft_text = draft_result['draft_text']
+                    model_used = draft_result['model_used']
+                    
+                    # Record API usage
+                    rate_limiter.record_api_usage(
+                        service='claude',
+                        action='generate_draft',
+                        success=True,
+                        tokens_used=draft_result.get('prompt_tokens', 0) + draft_result.get('completion_tokens', 0),
+                        metadata={'email_id': email_id, 'sender': sender_email}
+                    )
+                    
+                    # Store draft in database
+                    cursor = db.conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO draft_responses (
+                            email_id, draft_text, model_used, status
+                        ) VALUES (?, ?, ?, 'pending')
+                    """, (email_id, draft_text, model_used))
+                    
+                    draft_id = cursor.lastrowid
+                    db.conn.commit()
+                    
+                    # Record draft generation
+                    rate_limiter.record_draft_generated(email_id, sender_email, draft_id)
                 
-                draft_text = draft_result['draft_text']
-                model_used = draft_result['model_used']
-                
-                # Store draft in database
-                cursor = db.conn.cursor()
-                cursor.execute("""
-                    INSERT INTO draft_responses (
-                        email_id, draft_text, model_used, status
-                    ) VALUES (?, ?, ?, 'pending')
-                """, (email_id, draft_text, model_used))
-                
-                draft_id = cursor.lastrowid
-                db.conn.commit()
+                except Exception as draft_error:
+                    # Record failed API usage
+                    rate_limiter.record_api_usage(
+                        service='claude',
+                        action='generate_draft',
+                        success=False,
+                        metadata={'email_id': email_id, 'sender': sender_email, 'error': str(draft_error)}
+                    )
+                    raise  # Re-raise to be caught by outer error handler
                 
                 if not args.json:
                     print(f"   ✅ Draft created (ID: {draft_id})")
@@ -152,6 +191,13 @@ def main():
         logger.warning(f"Completed with {errors.count()} errors")
         if not args.json:
             print(f"\n⚠️  Completed with {errors.count()} errors (see logs/email-automation.log)")
+    
+    # Show usage summary
+    if not args.json:
+        usage = rate_limiter.get_usage_summary(hours=24)
+        print(f"\n📊 API Usage (last 24 hours):")
+        for service, stats in usage.get('services', {}).items():
+            print(f"   {service}: {stats['calls']} calls, {stats['tokens']} tokens")
     
     # Output results
     if args.json:
