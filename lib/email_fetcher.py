@@ -80,9 +80,7 @@ class EmailFetcher:
         action_name = "OUTLOOK_OUTLOOK_LIST_MESSAGES"
         
         input_params = {
-            "top": min(limit, 10),  # CRITICAL: Limit to 10 to avoid payload overflow
-            # CRITICAL: Only select necessary fields to reduce payload size
-            "select": "id,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,hasAttachments,importance,conversationId,bodyPreview"
+            "top": min(limit, 10)  # Limit to 10 to avoid payload overflow
         }
         
         if filter_query:
