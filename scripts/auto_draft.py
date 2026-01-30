@@ -63,12 +63,8 @@ def main():
     # Initialize analyzers
     analyzer = SenderAnalyzer(db)
     
-    try:
-        generator = DraftGenerator()
-    except ValueError as e:
-        print(f"❌ Error: {e}")
-        print("Set ANTHROPIC_API_KEY environment variable")
-        return
+    # Initialize draft generator (uses Clawdbot + Claude Max subscription)
+    generator = DraftGenerator(session_label="email-automation")
     
     drafts_created = []
     

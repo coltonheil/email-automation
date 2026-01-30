@@ -310,9 +310,10 @@ copy and send it from your email client.
 
 **Run test:**
 ```bash
-export ANTHROPIC_API_KEY=<your-key>
 bash scripts/test_auto_draft.sh
 ```
+
+**Note:** Draft generation now uses Claude Opus via your existing Clawdbot/Claude Max subscription - no separate API key needed.
 
 ---
 
@@ -320,8 +321,8 @@ bash scripts/test_auto_draft.sh
 
 **Draft Generation Time:**
 - Sender context analysis: <100ms (database query)
-- Claude API call: 2-4 seconds (depending on length)
-- Total: ~2-5 seconds per draft
+- Claude Opus via Clawdbot: 3-6 seconds (depending on length)
+- Total: ~3-7 seconds per draft
 
 **Accuracy:**
 - Context-aware: Uses real email history

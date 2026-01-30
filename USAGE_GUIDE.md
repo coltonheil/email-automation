@@ -11,8 +11,9 @@
 1. **Environment Variables:**
    ```bash
    export COMPOSIO_API_KEY=<your-composio-key>
-   export ANTHROPIC_API_KEY=<your-anthropic-key>
    ```
+   
+   **Note:** Draft generation now uses your existing Claude Max subscription via Clawdbot - no separate Anthropic API key needed!
 
 2. **Install Dependencies:**
    ```bash
@@ -243,9 +244,10 @@ python3 scripts/auto_draft.py --min-priority 90  # Higher threshold
 ### Full System Test:
 
 ```bash
-export ANTHROPIC_API_KEY=<your-key>
 bash scripts/test_auto_draft.sh
 ```
+
+**Note:** Draft generation now uses Claude Opus via your existing Clawdbot/Claude Max subscription.
 
 This tests:
 - ✅ Environment setup
@@ -258,11 +260,6 @@ This tests:
 ---
 
 ## 🐛 Troubleshooting
-
-### "ANTHROPIC_API_KEY not provided"
-```bash
-export ANTHROPIC_API_KEY=<your-anthropic-api-key>
-```
 
 ### "COMPOSIO_API_KEY not provided"
 ```bash
@@ -282,8 +279,9 @@ python3 scripts/sync_emails.py --mode unread --limit 5
 
 ### "Drafts not generating"
 - Ensure emails exist with priority >= 80
-- Check ANTHROPIC_API_KEY is valid
+- Check that Clawdbot is running and accessible
 - Try dry-run first: `--dry-run`
+- Draft generation uses Claude Opus via your Clawdbot/Claude Max subscription
 
 ---
 

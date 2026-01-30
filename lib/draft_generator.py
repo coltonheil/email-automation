@@ -1,32 +1,27 @@
 #!/usr/bin/env python3
 """
 Draft Generator
-Uses Claude to generate contextual email response drafts
+Uses Claude to generate contextual email response drafts via Clawdbot
 """
 
 import os
 import json
-import urllib.request
-import urllib.error
+import subprocess
 from typing import Dict, Any, Optional
 
 
 class DraftGenerator:
-    """Generates email draft responses using Claude"""
+    """Generates email draft responses using Claude via Clawdbot"""
     
-    def __init__(self, anthropic_api_key: str = None):
+    def __init__(self, session_label: str = "email-automation"):
         """
         Initialize draft generator
         
         Args:
-            anthropic_api_key: Anthropic API key (or uses ANTHROPIC_API_KEY env var)
+            session_label: Clawdbot session label to use (leverages your Claude Max subscription)
         """
-        self.api_key = anthropic_api_key or os.getenv('ANTHROPIC_API_KEY')
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not provided")
-        
-        self.api_url = "https://api.anthropic.com/v1/messages"
-        self.model = "claude-sonnet-4"  # Latest model
+        self.session_label = session_label
+        self.model = "opus"  # Using Claude Opus 4 via your existing subscription
     
     def generate_draft(
         self, 
@@ -48,8 +43,8 @@ class DraftGenerator:
         # Build prompt
         prompt = self._build_prompt(sender_context, user_writing_style, additional_instructions)
         
-        # Call Claude API
-        response = self._call_claude_api(prompt)
+        # Call Claude via Clawdbot (uses your Claude Max subscription)
+        response = self._call_claude_via_clawdbot(prompt)
         
         # Extract draft
         draft_text = response.get('content', [{}])[0].get('text', '')
@@ -151,48 +146,51 @@ class DraftGenerator:
         
         return '\n'.join(parts)
     
-    def _call_claude_api(self, prompt: str) -> Dict[str, Any]:
+    def _call_claude_via_clawdbot(self, prompt: str) -> Dict[str, Any]:
         """
-        Call Claude API to generate response
+        Call Claude via Clawdbot (uses your Claude Max subscription)
         
         Args:
             prompt: Full prompt for Claude
             
         Returns:
-            API response dict
+            Response dict with text and metadata
         """
-        headers = {
-            'x-api-key': self.api_key,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-        }
-        
-        payload = {
-            'model': self.model,
-            'max_tokens': 1024,
-            'messages': [
-                {
-                    'role': 'user',
-                    'content': prompt
-                }
-            ],
-            'temperature': 0.7,  # Slightly creative but focused
-        }
-        
         try:
-            req = urllib.request.Request(
-                self.api_url,
-                data=json.dumps(payload).encode('utf-8'),
-                headers=headers,
-                method='POST'
+            # Build clawdbot command to send message via sessions_send
+            # This leverages your existing Claude Max subscription
+            cmd = [
+                'clawdbot',
+                'sessions_send',
+                '--label', self.session_label,
+                '--model', self.model,
+                '--timeout', '60',
+                '--message', prompt
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=90  # Extra buffer for network + processing
             )
             
-            with urllib.request.urlopen(req, timeout=30) as response:
-                result = json.loads(response.read().decode('utf-8'))
-                return result
+            if result.returncode != 0:
+                raise Exception(f"Clawdbot error: {result.stderr}")
+            
+            # Parse response (Clawdbot returns plain text response)
+            response_text = result.stdout.strip()
+            
+            # Return in API-like format
+            return {
+                'content': [{'text': response_text}],
+                'usage': {
+                    'input_tokens': 0,  # Clawdbot doesn't expose these
+                    'output_tokens': 0
+                }
+            }
         
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            raise Exception(f"Claude API error {e.code}: {error_body}")
+        except subprocess.TimeoutExpired:
+            raise Exception("Claude request timed out after 90 seconds")
         except Exception as e:
-            raise Exception(f"Failed to call Claude API: {str(e)}")
+            raise Exception(f"Failed to call Claude via Clawdbot: {str(e)}")
