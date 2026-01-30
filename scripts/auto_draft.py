@@ -28,8 +28,8 @@ from sender_filter import SenderFilter
 
 def main():
     parser = argparse.ArgumentParser(description='Auto-draft responses for urgent emails')
-    parser.add_argument('--min-priority', type=int, default=80,
-                        help='Minimum priority score to auto-draft (default: 80)')
+    parser.add_argument('--min-priority', type=int, default=85,
+                        help='Minimum priority score to auto-draft (default: 85)')
     parser.add_argument('--limit', type=int, default=10,
                         help='Max emails to process (default: 10)')
     parser.add_argument('--dry-run', action='store_true',

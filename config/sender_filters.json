@@ -9,9 +9,19 @@
       "notifications@*",
       "marketing@*",
       "automated@*",
+      "alerts@*",
+      "updates@*",
+      "news@*",
+      "digest@*",
       "hello@substack.com",
       "noreply@github.com",
-      "noreply@medium.com"
+      "noreply@medium.com",
+      "noreply@linkedin.com",
+      "notification@*",
+      "mailer@*",
+      "bounce@*",
+      "info@*",
+      "support@*"
     ],
     "domains": [
       "mailchimp.com",
@@ -21,11 +31,17 @@
       "amazonses.com",
       "postmarkapp.com",
       "mandrillapp.com",
-      "sparkpostmail.com"
+      "sparkpostmail.com",
+      "constantcontact.com",
+      "hubspot.com",
+      "mailerlite.com",
+      "sendinblue.com",
+      "drip.com"
     ],
     "relationship_types": [
       "automated",
-      "newsletter"
+      "newsletter",
+      "vendor"
     ],
     "reasons": {
       "no-reply": "No-reply emails don't need responses",
@@ -37,12 +53,11 @@
   "always_draft": {
     "emails": [
       "*@anthropic.com",
-      "*@stripe.com",
-      "*@clawdbot.com"
+      "*@stripe.com"
     ],
     "domains": [],
-    "priority_threshold": 90,
-    "reason": "VIP senders always get drafts"
+    "priority_threshold": 85,
+    "reason": "VIP senders or high-priority emails"
   },
   "override": {
     "critical_keywords": [
