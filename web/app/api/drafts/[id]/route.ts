@@ -44,12 +44,25 @@ export async function GET(
       ORDER BY performed_at DESC
     `).all(id);
     
+    // Get versions
+    let versions: any[] = [];
+    try {
+      versions = db.prepare(`
+        SELECT * FROM draft_versions
+        WHERE draft_id = ?
+        ORDER BY version_number DESC
+      `).all(id);
+    } catch (e) {
+      // versions table might not exist
+    }
+    
     db.close();
     
     return NextResponse.json({
       success: true,
       draft,
       history,
+      versions,
     });
     
   } catch (error: any) {
@@ -149,6 +162,52 @@ export async function PATCH(
           INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes, metadata)
           VALUES (?, 'rated', ?, ?, ?, ?)
         `).run(id, data.by || 'user', now, data.notes || null, JSON.stringify({ score: data.score }));
+        break;
+      }
+      
+      case 'save_version': {
+        // Save current draft as a version before regenerating
+        const currentDraft = db.prepare(`SELECT draft_text, model_used, total_versions FROM draft_responses WHERE id = ?`).get(id) as any;
+        
+        if (currentDraft) {
+          const newVersion = (currentDraft.total_versions || 1);
+          
+          db.prepare(`
+            INSERT INTO draft_versions (draft_id, version_number, draft_text, model_used, created_by, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(id, newVersion, currentDraft.draft_text, currentDraft.model_used, data.by || 'user', data.notes || null);
+          
+          db.prepare(`
+            UPDATE draft_responses SET total_versions = total_versions + 1 WHERE id = ?
+          `).run(id);
+        }
+        break;
+      }
+      
+      case 'restore_version': {
+        // Restore a previous version
+        const version = db.prepare(`
+          SELECT * FROM draft_versions WHERE draft_id = ? AND version_number = ?
+        `).get(id, data.version) as any;
+        
+        if (!version) {
+          db.close();
+          return NextResponse.json(
+            { success: false, error: `Version ${data.version} not found` },
+            { status: 404 }
+          );
+        }
+        
+        db.prepare(`
+          UPDATE draft_responses
+          SET draft_text = ?, current_version = ?
+          WHERE id = ?
+        `).run(version.draft_text, data.version, id);
+        
+        db.prepare(`
+          INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes, metadata)
+          VALUES (?, 'restored', ?, ?, ?, ?)
+        `).run(id, data.by || 'user', now, `Restored to version ${data.version}`, JSON.stringify({ version: data.version }));
         break;
       }
       
