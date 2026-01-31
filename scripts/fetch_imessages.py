@@ -16,8 +16,9 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Add lib to path for send_guard
-sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
+# Add lib to path for send_guard and contacts_lookup
+LIB_PATH = str(Path(__file__).parent.parent / 'lib')
+sys.path.insert(0, LIB_PATH)
 
 # CRITICAL: Import send guard to block any send operations
 try:
@@ -50,11 +51,16 @@ def format_datetime(dt):
         return None
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
-def get_unread_messages(limit=50, hours_back=48):
+def get_unread_messages(limit=50, hours_back=48, include_contact_names=True):
     """
     Fetch unread messages from the Messages database.
     
     READ ONLY - No send capability.
+    
+    Args:
+        limit: Max messages to return
+        hours_back: How far back to look
+        include_contact_names: Whether to look up contact names
     """
     if not os.path.exists(MESSAGES_DB):
         return {
@@ -103,19 +109,35 @@ def get_unread_messages(limit=50, hours_back=48):
         rows = cursor.fetchall()
         
         messages = []
+        phone_numbers = []
+        
         for row in rows:
+            sender = row["sender_id"] or row["sender_raw"] or "Unknown"
+            phone_numbers.append(sender)
             msg = {
                 "id": row["message_id"],
                 "guid": row["message_guid"],
                 "text": row["text"],
                 "timestamp": format_datetime(apple_timestamp_to_datetime(row["timestamp"])),
-                "sender": row["sender_id"] or row["sender_raw"] or "Unknown",
+                "sender": sender,
+                "sender_name": None,  # Will be filled in below
                 "chat": row["chat_identifier"] or row["chat_name"] or "Unknown",
                 "service": row["service"] or "iMessage"
             }
             messages.append(msg)
         
         conn.close()
+        
+        # Look up contact names if requested
+        if include_contact_names and messages:
+            try:
+                from contacts_lookup import lookup_multiple
+                name_map = lookup_multiple(phone_numbers)
+                for msg in messages:
+                    msg["sender_name"] = name_map.get(msg["sender"])
+            except Exception as e:
+                # Contact lookup is optional
+                pass
         
         return {
             "success": True,
