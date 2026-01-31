@@ -126,19 +126,20 @@ export async function POST(
     
     const queueId = result.lastInsertRowid;
     
-    // Notify Clawdbot via Slack webhook (if configured) or file-based trigger
+    // Notify Clawdbot via Slack
     try {
-      const triggerPath = path.join(process.cwd(), '..', 'data', 'ai_edit_trigger.json');
-      const fs = await import('fs/promises');
-      await fs.mkdir(path.dirname(triggerPath), { recursive: true });
-      await fs.writeFile(triggerPath, JSON.stringify({
-        queue_id: queueId,
-        draft_id: id,
-        instruction,
-        timestamp: now
-      }));
+      const notifyUrl = `${request.nextUrl.origin}/api/notify-slack`;
+      await fetch(notifyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: 'repo-email-automation',
+          message: `🤖 *AI Edit Request Queued*\n\n*Queue ID:* ${queueId}\n*Draft ID:* ${id}\n*Instruction:* ${instruction.slice(0, 100)}${instruction.length > 100 ? '...' : ''}\n\n_Clawdbot: Please process this AI edit request._`
+        })
+      });
     } catch (e) {
-      // Trigger file optional
+      // Notification optional - don't fail the request
+      console.error('Failed to send Slack notification:', e);
     }
     
     db.close();
