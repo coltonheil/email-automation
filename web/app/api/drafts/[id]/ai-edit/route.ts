@@ -4,11 +4,26 @@ import path from 'path';
 
 const DB_PATH = path.join(process.cwd(), '..', 'database', 'emails.db');
 
-// Clawdbot gateway for AI processing
-const CLAWDBOT_URL = 'http://localhost:18789';
-const CLAWDBOT_TOKEN = process.env.CLAWDBOT_TOKEN || 'nLQNEdPibR0VkQM05E8vy32RpdaQ0QfGOXCn2I/uq9Q=';
+// Ensure queue table exists
+function ensureQueueTable(db: any) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ai_edit_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      draft_id INTEGER NOT NULL,
+      instruction TEXT NOT NULL,
+      current_draft TEXT NOT NULL,
+      original_email_json TEXT,
+      status TEXT DEFAULT 'pending',
+      result_text TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      processed_at TEXT,
+      FOREIGN KEY (draft_id) REFERENCES draft_responses(id)
+    )
+  `);
+}
 
-// POST - Process AI edit request
+// POST - Queue AI edit request for Clawdbot processing
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,16 +31,56 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { instruction } = body;
+    const { instruction, poll_queue_id } = body;
     
+    const db = new Database(DB_PATH);
+    ensureQueueTable(db);
+    
+    // If polling for queue result
+    if (poll_queue_id) {
+      const queueItem = db.prepare(`
+        SELECT * FROM ai_edit_queue WHERE id = ?
+      `).get(poll_queue_id) as any;
+      
+      if (!queueItem) {
+        db.close();
+        return NextResponse.json({ success: false, error: 'Queue item not found' }, { status: 404 });
+      }
+      
+      if (queueItem.status === 'completed') {
+        db.close();
+        return NextResponse.json({
+          success: true,
+          completed: true,
+          newDraftText: queueItem.result_text,
+          id: queueItem.draft_id
+        });
+      } else if (queueItem.status === 'failed') {
+        db.close();
+        return NextResponse.json({
+          success: false,
+          completed: true,
+          error: queueItem.error_message || 'Processing failed'
+        });
+      } else {
+        db.close();
+        return NextResponse.json({
+          success: true,
+          completed: false,
+          status: queueItem.status,
+          message: 'Still processing...'
+        });
+      }
+    }
+    
+    // New edit request
     if (!instruction) {
+      db.close();
       return NextResponse.json(
         { success: false, error: 'instruction is required' },
         { status: 400 }
       );
     }
-    
-    const db = new Database(DB_PATH);
     
     // Get current draft and original email
     const draft = db.prepare(`
@@ -54,124 +109,46 @@ export async function POST(
     }
     
     const currentDraft = draft.edited_text || draft.draft_text;
-    
-    // Build prompt for Claude
-    const prompt = `You are helping edit an email draft response. 
-
-ORIGINAL EMAIL (what the user is replying to):
-From: ${draft.from_name} <${draft.from_email}>
-Subject: ${draft.subject}
-Body: ${(draft.body || draft.snippet || '').slice(0, 2000)}
-
-CURRENT DRAFT RESPONSE:
-${currentDraft}
-
-USER'S EDIT INSTRUCTION:
-${instruction}
-
-Please provide ONLY the updated draft text. Do not include any explanation, just the new draft email body. Do not include subject line or signature - just the email body text.`;
-
-    // Call Anthropic API directly (faster than going through Clawdbot gateway)
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    
-    let newDraftText: string;
-    
-    if (anthropicKey) {
-      // Direct API call
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Anthropic API error: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      newDraftText = result.content[0]?.text || '';
-    } else {
-      // Fallback: Call Clawdbot gateway
-      const response = await fetch(`${CLAWDBOT_URL}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${CLAWDBOT_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: prompt,
-          model: 'sonnet',
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Clawdbot API error: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      newDraftText = result.response || result.content || '';
-    }
-    
-    if (!newDraftText) {
-      db.close();
-      return NextResponse.json(
-        { success: false, error: 'AI returned empty response' },
-        { status: 500 }
-      );
-    }
-    
-    // Clean up the response (remove any markdown formatting)
-    newDraftText = newDraftText
-      .replace(/^```[\s\S]*?\n/, '')
-      .replace(/\n```$/, '')
-      .trim();
-    
     const now = new Date().toISOString();
     
-    // Save current as version before updating
-    const newVersionNum = (draft.total_versions || 1);
+    const originalEmailJson = JSON.stringify({
+      from_name: draft.from_name,
+      from_email: draft.from_email,
+      subject: draft.subject,
+      body: (draft.body || draft.snippet || '').slice(0, 2000)
+    });
+    
+    // Queue the edit request
+    const result = db.prepare(`
+      INSERT INTO ai_edit_queue (draft_id, instruction, current_draft, original_email_json, status, created_at)
+      VALUES (?, ?, ?, ?, 'pending', ?)
+    `).run(id, instruction, currentDraft, originalEmailJson, now);
+    
+    const queueId = result.lastInsertRowid;
+    
+    // Notify Clawdbot via Slack webhook (if configured) or file-based trigger
     try {
-      db.prepare(`
-        INSERT INTO draft_versions (draft_id, version_number, draft_text, model_used, created_by, notes)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, newVersionNum, currentDraft, draft.model_used || 'unknown', 'ai-edit', instruction);
+      const triggerPath = path.join(process.cwd(), '..', 'data', 'ai_edit_trigger.json');
+      const fs = await import('fs/promises');
+      await fs.mkdir(path.dirname(triggerPath), { recursive: true });
+      await fs.writeFile(triggerPath, JSON.stringify({
+        queue_id: queueId,
+        draft_id: id,
+        instruction,
+        timestamp: now
+      }));
     } catch (e) {
-      // versions table might not exist
+      // Trigger file optional
     }
-    
-    // Update draft with new text
-    db.prepare(`
-      UPDATE draft_responses
-      SET edited_text = ?, model_used = 'claude-sonnet', total_versions = COALESCE(total_versions, 1) + 1
-      WHERE id = ?
-    `).run(newDraftText, id);
-    
-    // Log the edit
-    db.prepare(`
-      INSERT INTO draft_approval_history (draft_id, action, performed_by, performed_at, notes, metadata)
-      VALUES (?, 'ai_edited', 'claude-sonnet', ?, ?, ?)
-    `).run(id, now, instruction, JSON.stringify({ 
-      instruction,
-      prev_length: currentDraft.length,
-      new_length: newDraftText.length
-    }));
     
     db.close();
     
     return NextResponse.json({
       success: true,
-      id,
-      newDraftText,
-      instruction,
-      versionSaved: newVersionNum
+      queued: true,
+      queue_id: Number(queueId),
+      draft_id: id,
+      message: 'Edit request queued. Clawdbot is processing...'
     });
     
   } catch (error: any) {

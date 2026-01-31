@@ -137,7 +137,7 @@ export default function DraftsPage() {
     
     setAiLoading(true);
     try {
-      // Call the AI edit endpoint directly
+      // Queue the AI edit request
       const res = await fetch(`/api/drafts/${selectedDraft.id}/ai-edit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -146,8 +146,51 @@ export default function DraftsPage() {
       
       const data = await res.json();
       
-      if (data.success && data.newDraftText) {
-        // Update the selected draft with new text
+      if (data.success && data.queued) {
+        // Poll for completion
+        const queueId = data.queue_id;
+        let attempts = 0;
+        const maxAttempts = 60; // 60 seconds max
+        
+        const pollForResult = async () => {
+          attempts++;
+          const pollRes = await fetch(`/api/drafts/${selectedDraft.id}/ai-edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ poll_queue_id: queueId }),
+          });
+          
+          const pollData = await pollRes.json();
+          
+          if (pollData.completed) {
+            if (pollData.success && pollData.newDraftText) {
+              // Update the selected draft with new text
+              setSelectedDraft({
+                ...selectedDraft,
+                edited_text: pollData.newDraftText,
+              });
+              setEditedText(pollData.newDraftText);
+              setShowAiEdit(false);
+              setAiInstruction('');
+              fetchDrafts();
+            } else {
+              alert(`Error: ${pollData.error || 'AI edit failed'}`);
+            }
+            setAiLoading(false);
+          } else if (attempts < maxAttempts) {
+            // Keep polling
+            setTimeout(pollForResult, 1000);
+          } else {
+            alert('AI edit timed out. Check back later or try again.');
+            setAiLoading(false);
+          }
+        };
+        
+        // Start polling after a short delay
+        setTimeout(pollForResult, 1000);
+        
+      } else if (data.success && data.newDraftText) {
+        // Immediate result (shouldn't happen with queue, but handle it)
         setSelectedDraft({
           ...selectedDraft,
           edited_text: data.newDraftText,
@@ -155,16 +198,15 @@ export default function DraftsPage() {
         setEditedText(data.newDraftText);
         setShowAiEdit(false);
         setAiInstruction('');
-        
-        // Refresh the drafts list
         fetchDrafts();
+        setAiLoading(false);
       } else {
-        alert(`Error: ${data.error || 'Failed to update draft'}`);
+        alert(`Error: ${data.error || 'Failed to queue edit'}`);
+        setAiLoading(false);
       }
     } catch (error) {
       console.error('Error requesting AI edit:', error);
       alert('Error processing AI edit request');
-    } finally {
       setAiLoading(false);
     }
   };
