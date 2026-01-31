@@ -16,6 +16,20 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Add lib to path for send_guard
+sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
+
+# CRITICAL: Import send guard to block any send operations
+try:
+    from send_guard import guard_applescript, SendBlockedError
+except ImportError:
+    # If send_guard not available, define a local block
+    class SendBlockedError(Exception):
+        pass
+    def guard_applescript(script):
+        if 'send' in script.lower():
+            raise SendBlockedError("Send operations are blocked")
+
 # Messages database location
 MESSAGES_DB = os.path.expanduser("~/Library/Messages/chat.db")
 

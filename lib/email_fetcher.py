@@ -2,6 +2,9 @@
 """
 Email Fetcher - Pulls emails from all connected accounts
 With robust error handling and retry logic
+
+⛔ SAFETY: This module is READ-ONLY.
+   It imports send_guard which blocks all send operations.
 """
 
 import os
@@ -11,6 +14,9 @@ import urllib.parse
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from retry_utils import retry_with_backoff, safe_api_call, logger
+
+# CRITICAL: Import send guard to block any send operations
+from send_guard import guard_composio_action, is_send_action, SendBlockedError
 
 
 class EmailFetcher:
@@ -161,7 +167,11 @@ class EmailFetcher:
             
         Raises:
             Exception: On permanent failure after all retries
+            SendBlockedError: If attempting a send action (BLOCKED)
         """
+        # ⛔ CRITICAL SECURITY CHECK - Block any send operations
+        guard_composio_action(action_name, input_params)
+        
         url = f"{self.base_url}/actions/{action_name}/execute"
         
         payload = {
