@@ -845,3 +845,13 @@ Exception: No ANTHROPIC_API_KEY available. Ask Clawdbot to generate drafts manua
 2026-01-31 12:24:11,065 - retry_utils - INFO - Composio action OUTLOOK_OUTLOOK_LIST_MESSAGES succeeded
 2026-01-31 12:24:11,092 - retry_utils - INFO - Executing Composio action: INSTANTLY_LIST_EMAILS (account: 03304007...)
 2026-01-31 12:24:12,617 - retry_utils - INFO - Composio action INSTANTLY_LIST_EMAILS succeeded
+2026-01-31 16:18:54,766 - retry_utils - INFO - Executing Composio action: GMAIL_FETCH_EMAILS (account: 481bf3fb...)
+2026-01-31 16:19:24,988 - retry_utils - ERROR - Action GMAIL_FETCH_EMAILS execution failed: The read operation timed out
+2026-01-31 16:19:24,995 - retry_utils - INFO - Executing Composio action: OUTLOOK_OUTLOOK_LIST_MESSAGES (account: 4f48e4cd...)
+2026-01-31 16:19:27,024 - retry_utils - INFO - Composio action OUTLOOK_OUTLOOK_LIST_MESSAGES succeeded
+2026-01-31 16:19:27,063 - retry_utils - INFO - Executing Composio action: OUTLOOK_OUTLOOK_LIST_MESSAGES (account: e662c7fe...)
+2026-01-31 16:19:57,128 - retry_utils - ERROR - Action OUTLOOK_OUTLOOK_LIST_MESSAGES execution failed: The read operation timed out
+2026-01-31 16:19:57,134 - retry_utils - INFO - Executing Composio action: OUTLOOK_OUTLOOK_LIST_MESSAGES (account: cabb6ded...)
+2026-01-31 16:20:27,203 - retry_utils - ERROR - Action OUTLOOK_OUTLOOK_LIST_MESSAGES execution failed: The read operation timed out
+2026-01-31 16:20:27,206 - retry_utils - INFO - Executing Composio action: INSTANTLY_LIST_EMAILS (account: 03304007...)
+2026-01-31 16:20:28,223 - retry_utils - INFO - Composio action INSTANTLY_LIST_EMAILS succeeded
