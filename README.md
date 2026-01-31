@@ -137,8 +137,25 @@ Gmail/Outlook/Instantly → Fetch → Normalize → Score → Deduplicate → So
 
 ## Safety
 
-🔒 **Never auto-sends emails**  
+🔒 **Never auto-sends emails or iMessages**  
 All response drafts go to #exec-approvals for human review.
+
+### Security Barriers
+
+This system has **multiple layers of protection** against accidental sending:
+
+1. **`lib/send_guard.py`** - Runtime blocker that:
+   - Blocks all Composio send actions (GMAIL_SEND_EMAIL, OUTLOOK_SEND_MAIL, etc.)
+   - Patches subprocess.run/os.system to block AppleScript sends
+   - Raises `SendBlockedError` if any send operation is attempted
+
+2. **Read-only database access** for iMessages (`?mode=ro`)
+
+3. **No send endpoints** in the web API
+
+4. **All drafts reviewed via Slack** before manual sending
+
+See **SECURITY.md** for full details.
 
 ## Dependencies
 
