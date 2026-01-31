@@ -41,6 +41,14 @@ from imessage_context import (
     build_conversation_context
 )
 
+from imessage_profiler import (
+    ContactProfile,
+    load_profile,
+    build_profile,
+    save_profile,
+    get_profile_contacts
+)
+
 # Database path
 DB_PATH = Path(__file__).parent.parent / "database" / "emails.db"
 
@@ -56,17 +64,21 @@ class DraftResult:
     draft_id: Optional[int] = None
 
 
-def build_opus_prompt(context: ConversationContext) -> str:
+def build_opus_prompt(context: ConversationContext, profile: Optional[ContactProfile] = None) -> str:
     """
     Build the prompt for Opus 4.5 to generate a response.
     
     Includes:
     - Contact info and relationship context
-    - My communication patterns with this person
+    - My communication patterns with this person (from profile if available)
     - Full conversation history
     - Specific unread messages needing response
     """
     contact_display = context.contact_name or context.phone
+    
+    # Load profile if not provided
+    if profile is None:
+        profile = load_profile(context.phone)
     
     # Format conversation history
     conversation_text = format_messages_for_prompt(
@@ -82,10 +94,37 @@ def build_opus_prompt(context: ConversationContext) -> str:
             for m in context.unread_messages
         ])
     
+    # Use profile data if available, otherwise fall back to context
+    if profile and profile.my_message_count > 0:
+        avg_length = int(profile.my_avg_message_length)
+        msgs_per_turn = profile.my_avg_messages_per_turn
+        emoji_usage = profile.my_emoji_frequency
+        emoji_examples = f" (commonly: {' '.join(profile.my_emoji_examples[:3])})" if profile.my_emoji_examples else ""
+        formality = profile.my_formality_score
+        greeting = profile.my_typical_greeting
+        relationship = profile.relationship_type
+        topics = ', '.join(profile.common_topics[:5]) if profile.common_topics else 'various'
+        profile_section = f"""## MY STORED PROFILE WITH THIS PERSON
+{profile.to_prompt_summary()}
+
+Note: This profile was built from analyzing {profile.total_messages_analyzed} messages.
+"""
+    else:
+        avg_length = int(context.avg_my_message_length) if context.avg_my_message_length > 0 else 50
+        msgs_per_turn = context.my_messages_per_turn
+        emoji_usage = context.my_emoji_usage
+        emoji_examples = ""
+        formality = 5
+        greeting = context.my_typical_greeting
+        relationship = "unknown"
+        topics = "various"
+        profile_section = """## MY COMMUNICATION STYLE (from recent messages)
+Note: No stored profile - using patterns from recent conversation."""
+    
     # Determine expected response format
-    if context.my_messages_per_turn >= 2.5:
+    if msgs_per_turn >= 2.5:
         response_format = "multiple short messages (2-3 messages)"
-    elif context.my_messages_per_turn >= 1.5:
+    elif msgs_per_turn >= 1.5:
         response_format = "1-2 messages"
     else:
         response_format = "a single message"
@@ -95,13 +134,17 @@ def build_opus_prompt(context: ConversationContext) -> str:
 ## CONTACT
 Name: {contact_display}
 Phone: {context.phone}
+Relationship: {relationship}
 
-## MY COMMUNICATION STYLE WITH THIS PERSON
-- Average message length: {int(context.avg_my_message_length)} characters
-- Messages per turn: {context.my_messages_per_turn:.1f} (I typically send {response_format})
-- Emoji usage: {context.my_emoji_usage}
-- Formality: {context.formality_level}
-- Typical greeting: "{context.my_typical_greeting}" (or none)
+{profile_section}
+
+## STYLE SUMMARY
+- Average message length: {avg_length} characters
+- Messages per turn: {msgs_per_turn:.1f} (I typically send {response_format})
+- Emoji usage: {emoji_usage}{emoji_examples}
+- Formality: {formality}/10
+- Typical greeting: "{greeting}" (or none)
+- Topics we discuss: {topics}
 
 ## CONVERSATION HISTORY (last {len(context.messages)} messages)
 {conversation_text}
@@ -111,19 +154,20 @@ Phone: {context.phone}
 
 ## INSTRUCTIONS
 1. Write a response that sounds EXACTLY like my other messages in this conversation
-2. Match my typical message length and style with this person
-3. If I usually send multiple messages in a row, do the same
-4. Use emojis only if I typically use them with this person
+2. Match my typical message length ({avg_length} chars) and style with this person
+3. {"Send " + str(int(msgs_per_turn)) + "+ short messages in a row (this is my pattern)" if msgs_per_turn >= 2 else "Send a single message"}
+4. {"Use emojis sparingly" if emoji_usage in ["low", "medium"] else "Don't use emojis" if emoji_usage == "none" else "Use emojis freely"}
 5. Be natural and conversational - this should be indistinguishable from my real messages
 6. Directly address what they said/asked
-7. Keep the same energy and tone as my previous messages
+7. {"Keep it casual and brief" if formality <= 5 else "Be appropriately professional"}
 
 ## OUTPUT FORMAT
-{"If I typically send multiple messages:" if context.my_messages_per_turn >= 1.5 else ""}
+{"Since I typically send " + str(int(msgs_per_turn)) + " messages per turn with this person:" if msgs_per_turn >= 1.5 else ""}
 MESSAGE 1: <first message>
-MESSAGE 2: <second message if needed>
+{"MESSAGE 2: <second message>" if msgs_per_turn >= 1.5 else ""}
+{"MESSAGE 3: <third message if needed>" if msgs_per_turn >= 2.5 else ""}
 
-{"If single message:" if context.my_messages_per_turn < 1.5 else ""}
+{"If single message works better:" if msgs_per_turn < 1.5 else ""}
 MESSAGE: <your draft>
 
 IMPORTANT: Provide ONLY the message text. No explanations, no "Here's a draft:", just the message(s)."""

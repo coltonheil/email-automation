@@ -1,0 +1,66 @@
+{
+  "description": "Contacts with full communication profiles",
+  "updated_at": "2026-01-30T21:21:02.069487",
+  "contacts": [
+    {
+      "phone": "+16465659375",
+      "name": "Faridy Casanova Anicama",
+      "message_count_6mo": 5298
+    },
+    {
+      "phone": "+17155717090",
+      "name": "Ethan",
+      "message_count_6mo": 257
+    },
+    {
+      "phone": "+16072629024",
+      "name": "G - Lixil",
+      "message_count_6mo": 231
+    },
+    {
+      "phone": "+16126369700",
+      "name": "Chris Long - Minneaplis Realator",
+      "message_count_6mo": 208
+    },
+    {
+      "phone": "+16122408020",
+      "name": "Chapel Puckett",
+      "message_count_6mo": 118
+    },
+    {
+      "phone": "+16122826794",
+      "name": "Jaimie Unit 3",
+      "message_count_6mo": 110
+    },
+    {
+      "phone": "+16124372824",
+      "name": "Adam Noe (Know - y)",
+      "message_count_6mo": 83
+    },
+    {
+      "phone": "+19523346002",
+      "name": "Aiden Regan",
+      "message_count_6mo": 83
+    },
+    {
+      "phone": "+19143254281",
+      "name": "Taiyo Hamanka - Mck",
+      "message_count_6mo": 82
+    },
+    {
+      "phone": "+13018012838",
+      "name": "Nick Guzman",
+      "message_count_6mo": 67
+    },
+    {
+      "phone": "+16122140401",
+      "name": "Adrian - Handyman",
+      "message_count_6mo": 67
+    },
+    {
+      "phone": "+13013353356",
+      "name": "Tina",
+      "message_count_6mo": 64
+    }
+  ]
+}
