@@ -137,40 +137,33 @@ export default function DraftsPage() {
     
     setAiLoading(true);
     try {
-      // This will be picked up by Clawdbot watching this channel
-      // For now, we'll show a message and close the modal
-      // The actual AI edit happens via Clawdbot
-      
-      // Post to the webhook that Clawdbot monitors
-      const res = await fetch('/api/notify-slack', {
+      // Call the AI edit endpoint directly
+      const res = await fetch(`/api/drafts/${selectedDraft.id}/ai-edit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: 'exec-approvals',
-          message: `🤖 **AI Edit Request** (Draft #${selectedDraft.id})
-
-**Email:** ${selectedDraft.subject}
-**From:** ${selectedDraft.from_name} <${selectedDraft.from_email}>
-
-**Instruction:** ${aiInstruction}
-
-**Current Draft:**
-\`\`\`
-${(selectedDraft.edited_text || selectedDraft.draft_text).slice(0, 500)}${(selectedDraft.edited_text || selectedDraft.draft_text).length > 500 ? '...' : ''}
-\`\`\`
-
-_Waiting for AI to process..._`
-        }),
+        body: JSON.stringify({ instruction: aiInstruction }),
       });
       
-      if (res.ok) {
-        alert('AI edit request sent! The draft will be updated shortly.\n\nCheck #exec-approvals for the response.');
+      const data = await res.json();
+      
+      if (data.success && data.newDraftText) {
+        // Update the selected draft with new text
+        setSelectedDraft({
+          ...selectedDraft,
+          edited_text: data.newDraftText,
+        });
+        setEditedText(data.newDraftText);
         setShowAiEdit(false);
         setAiInstruction('');
+        
+        // Refresh the drafts list
+        fetchDrafts();
+      } else {
+        alert(`Error: ${data.error || 'Failed to update draft'}`);
       }
     } catch (error) {
       console.error('Error requesting AI edit:', error);
-      alert('Error sending AI edit request');
+      alert('Error processing AI edit request');
     } finally {
       setAiLoading(false);
     }

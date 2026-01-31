@@ -146,6 +146,17 @@ All response drafts go to #exec-approvals for human review.
 - Composio API key (set as `COMPOSIO_API_KEY`)
 - Connected accounts (Gmail, Outlook, Instantly)
 
+## LLM Configuration
+
+**⚠️ IMPORTANT:** This project does NOT need a separate LLM API key.
+
+All LLM operations (drafting, analysis, etc.) run through **Clawdbot's global Claude Max account**. Do not:
+- Set up a separate Anthropic API key
+- Configure OpenRouter or other LLM providers
+- Add LLM-related environment variables
+
+Clawdbot handles all AI inference directly through its existing Claude Max subscription.
+
 ## Troubleshooting
 
 ### No emails fetched
